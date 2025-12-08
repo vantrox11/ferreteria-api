@@ -1,6 +1,6 @@
 import { type Request, type Response } from 'express';
-import * as tenantModel from '../models/tenant.model';
-import * as usuarioModel from '../models/usuario.model';
+import * as tenantModel from '../services/tenants.service';
+import * as usuarioModel from '../services/usuarios.service';
 import { db } from '../config/db';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';

@@ -11,7 +11,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as notaCreditoModel from '../models/nota-credito.model';
+import * as notaCreditoModel from '../services/notas-credito.service';
 
 /**
  * @route POST /api/notas-credito

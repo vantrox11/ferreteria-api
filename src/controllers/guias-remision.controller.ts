@@ -10,7 +10,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as guiaRemisionModel from '../models/guia-remision.model';
+import * as guiaRemisionModel from '../services/guias-remision.service';
 
 /**
  * @route POST /api/guias-remision

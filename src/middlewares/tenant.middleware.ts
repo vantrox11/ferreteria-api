@@ -1,6 +1,6 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import asyncHandler from 'express-async-handler';
-import { findTenantBySubdominio } from '../models/tenant.model';
+import { findTenantBySubdominio } from '../services/tenants.service';
 
 export interface RequestWithTenant extends Request {
     tenantId?: number;

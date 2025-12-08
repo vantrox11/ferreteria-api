@@ -3,9 +3,10 @@ import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 import { IdParamSchema } from '../dtos/common.dto';
 import { CreateVentaSchema, ListVentasQuerySchema, UpdateVentaSchema } from '../dtos/venta.dto';
-import * as ventaModel from '../models/venta.model';
+import * as ventaModel from '../services/ventas.service';
 import * as auditService from '../services/audit.service';
 import { db } from '../config/db';
+import { isAppError, AppError } from '../utils/app-error';
 
 /**
  * GET /api/ventas — Lista todas las ventas del tenant con paginación, búsqueda y filtros
@@ -224,24 +225,19 @@ export const createVentaHandler = asyncHandler(
           venta_id: d.venta_id,
         })),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error al crear venta:', error);
-      console.error('Error code:', error?.code);
-      console.error('Error message:', error?.message);
-      console.error('Body recibido:', JSON.stringify(req.body, null, 2));
 
-      if (error?.code === 'PRODUCTO_NOT_FOUND') {
-        res.status(404).json({ message: error.message });
+      // Usar sistema de errores tipados
+      if (isAppError(error)) {
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        res.status(error.statusCode).json(error.toJSON());
         return;
       }
-      if (error?.code === 'STOCK_INSUFICIENTE') {
-        res.status(409).json({ message: error.message });
-        return;
-      }
-      if (error?.code === 'SERIE_NOT_FOUND') {
-        res.status(404).json({ message: error.message });
-        return;
-      }
+
+      console.error('Error no tipado:', error);
+      console.error('Body recibido:', JSON.stringify(req.body, null, 2));
       res.status(500).json({ message: 'Error al crear venta.' });
     }
   }
@@ -288,9 +284,9 @@ export const deleteVentaHandler = asyncHandler(
       }
 
       res.status(200).json({ message: 'Venta eliminada exitosamente.' });
-    } catch (error: any) {
-      if (error?.code === 'COMPROBANTE_SUNAT_ACEPTADO') {
-        res.status(403).json({ message: error.message });
+    } catch (error: unknown) {
+      if (isAppError(error)) {
+        res.status(error.statusCode).json(error.toJSON());
         return;
       }
       res.status(500).json({ message: 'Error al eliminar venta.' });

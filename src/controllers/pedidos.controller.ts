@@ -1,8 +1,8 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as pedidosModel from '../models/pedidos.model';
-import * as tenantModel from '../models/tenant.model';
+import * as pedidosModel from '../services/pedidos.service';
+import * as tenantModel from '../services/tenants.service';
 import { EstadoPedido } from '@prisma/client';
 
 /**

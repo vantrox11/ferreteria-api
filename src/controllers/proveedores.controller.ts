@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as proveedorModel from '../models/proveedor.model';
+import * as proveedorModel from '../services/proveedores.service';
 // Validación manejada por middleware validateRequest
 
 /**

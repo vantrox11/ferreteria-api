@@ -3,7 +3,7 @@ import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 import { IdParamSchema } from '../dtos/common.dto';
 import { CreatePagoSchema } from '../dtos/pago.dto';
-import * as pagoModel from '../models/pago.model';
+import * as pagoModel from '../services/pagos.service';
 
 /**
  * POST /api/cuentas-por-cobrar/:id/pagos — Registra un pago sobre una CxC

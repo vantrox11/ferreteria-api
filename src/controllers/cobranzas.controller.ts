@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as cobranzaModel from '../models/cobranza.model';
+import * as cobranzaModel from '../services/cobranzas.service';
 import { type CreatePagoDTO } from '../dtos/cobranza.dto';
 import { db } from '../config/db';
 

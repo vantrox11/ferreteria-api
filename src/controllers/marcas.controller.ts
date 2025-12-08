@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as marcaModel from '../models/marca.model';
+import * as marcaModel from '../services/marcas.service';
 import { CreateMarcaSchema, UpdateMarcaSchema } from '../dtos/marca.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 

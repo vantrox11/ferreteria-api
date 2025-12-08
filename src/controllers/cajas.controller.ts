@@ -1,5 +1,5 @@
 import { type Response } from 'express';
-import cajaModel from '../models/caja.model';
+import cajaModel from '../services/cajas.service';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 
 /**

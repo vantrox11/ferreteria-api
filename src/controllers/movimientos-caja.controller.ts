@@ -1,5 +1,5 @@
 import { type Response } from 'express';
-import movimientoCajaModel from '../models/movimiento-caja.model';
+import movimientoCajaModel from '../services/movimientos-caja.service';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 
 export async function createMovimientoHandler(req: RequestWithAuth, res: Response) {

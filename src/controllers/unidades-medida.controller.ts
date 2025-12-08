@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as unidadMedidaModel from '../models/unidad-medida.model';
+import * as unidadMedidaModel from '../services/unidades-medida.service';
 import { CreateUnidadMedidaSchema, UpdateUnidadMedidaSchema } from '../dtos/unidad-medida.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 import { UNIDADES_MEDIDA_SUNAT, obtenerUnidadesPorCategoria } from '../config/catalogo-sunat';

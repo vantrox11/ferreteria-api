@@ -1,5 +1,5 @@
 import { type Response } from 'express';
-import sesionCajaModel from '../models/sesion-caja.model';
+import sesionCajaModel from '../services/sesiones-caja.service';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 
 export async function abrirSesionHandler(req: RequestWithAuth, res: Response) {

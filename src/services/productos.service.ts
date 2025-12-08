@@ -1,7 +1,7 @@
 import { db } from '../config/db';
 import { type Prisma } from '@prisma/client';
 import { type CreateProductoDTO, type UpdateProductoDTO } from '../dtos/producto.dto';
-import * as tenantModel from './tenant.model';
+import * as tenantModel from './tenants.service';
 import Decimal from 'decimal.js';
 
 // Configurar Decimal.js para alta precisión

@@ -1,10 +1,23 @@
 import { db } from '../config/db';
 import { Prisma } from '@prisma/client';
 import { type CreateVentaDTO } from '../dtos/venta.dto';
-import * as tenantModel from './tenant.model';
+import * as tenantModel from './tenants.service';
 import { calcularTasaIGV, descomponerPrecioConIGV, type AfectacionIGV } from '../utils/fiscal.utils';
 import { obtenerFacturador, type DatosComprobante } from '../services/facturador.service';
 import * as inventarioService from '../services/inventario.service';
+import { SesionCajaError, NotFoundError, FiscalError, ValidationError, ComprobanteAceptadoError } from '../utils/app-error';
+
+/**
+ * Tipo para detalles de venta con cálculos de IGV
+ */
+interface DetalleConIGV {
+  producto_id: number;
+  cantidad: number;
+  valor_unitario: number;
+  precio_unitario: number;
+  igv_total: number;
+  tasa_igv: number;
+}
 
 /**
  * Calcula la fecha de vencimiento basándose en los días de crédito del cliente
@@ -170,7 +183,10 @@ export const createVenta = async (
   usuarioId?: number,
   pedidoOrigenId?: number
 ) => {
-  return db.$transaction(async (tx) => {
+  // ========================================================
+  // PASO 1: TRANSACCIÓN DE BASE DE DATOS (rápida, sin HTTP)
+  // ========================================================
+  const resultadoTx = await db.$transaction(async (tx) => {
     // 1. Obtener la caja de la sesión actual y validar estado
     const sesion = await tx.sesionesCaja.findFirst({
       where: { id: sesionCajaId, tenant_id: tenantId },
@@ -178,16 +194,12 @@ export const createVenta = async (
     });
 
     if (!sesion?.caja_id) {
-      const err = new Error('Sesión de caja no tiene una caja asignada');
-      (err as any).code = 'SESION_SIN_CAJA';
-      throw err;
+      throw new SesionCajaError('Sesión de caja no tiene una caja asignada', 'SESION_SIN_CAJA');
     }
 
     // VALIDACIÓN CRÍTICA: No permitir ventas en cajas cerradas
     if (sesion.estado !== 'ABIERTA') {
-      const err = new Error('No se pueden registrar ventas en una caja cerrada. Abra una nueva sesión de caja.');
-      (err as any).code = 'CAJA_CERRADA';
-      throw err;
+      throw new SesionCajaError('No se pueden registrar ventas en una caja cerrada. Abra una nueva sesión de caja.', 'CAJA_CERRADA');
     }
 
     // 2. Determinar tipo de comprobante
@@ -218,11 +230,7 @@ export const createVenta = async (
       });
 
       if (!cliente?.ruc && !cliente?.documento_identidad?.match(/^[0-9]{11}$/)) {
-        const err = new Error(
-          'Para emitir FACTURA, el cliente debe tener RUC registrado. Use BOLETA para clientes con DNI.'
-        );
-        (err as any).code = 'FACTURA_REQUIRES_RUC';
-        throw err;
+        throw new FiscalError('Para emitir FACTURA, el cliente debe tener RUC registrado. Use BOLETA para clientes con DNI.', 'FACTURA_REQUIRES_RUC');
       }
     }
 
@@ -238,27 +246,15 @@ export const createVenta = async (
     });
 
     if (!serie) {
-      const err = new Error(
-        `No existe una serie activa para comprobantes tipo ${tipoComprobante} asignada a esta caja. Por favor, configure las series en Administración → Series SUNAT.`
-      );
-      (err as any).code = 'SERIE_NOT_FOUND';
-      throw err;
+      throw new NotFoundError(`Serie activa para ${tipoComprobante} en esta caja`);
     }
 
     // 4. Obtener configuración tributaria del tenant
     const fiscalConfig = await tenantModel.getTenantFiscalConfig(tenantId);
-
     // 5. Validar stock PRIMERO (antes de incrementar correlativo)
     // Calcular total y preparar detalles con snapshot fiscal
     let total = 0;
-    const detallesConIGV: Array<{
-      producto_id: number;
-      cantidad: number;
-      valor_unitario: number;
-      precio_unitario: number;
-      igv_total: number;
-      tasa_igv: number;
-    }> = [];
+    const detallesConIGV: DetalleConIGV[] = [];
 
     // Validar stock y calcular IGV para cada detalle
     for (const detalle of data.detalles) {
@@ -273,11 +269,7 @@ export const createVenta = async (
       });
 
       if (!producto) {
-        const err = new Error(
-          `Producto con ID ${detalle.producto_id} no encontrado en este tenant`
-        );
-        (err as any).code = 'PRODUCTO_NOT_FOUND';
-        throw err;
+        throw new NotFoundError('Producto', detalle.producto_id);
       }
 
       // NOTA: La validación de stock se delega al servicio de inventario que usa
@@ -375,9 +367,9 @@ export const createVenta = async (
 
       // Validar que el pago inicial no exceda el total
       if (pagoInicial > montoTotal) {
-        throw Object.assign(
-          new Error(`El pago inicial (S/ ${pagoInicial.toFixed(2)}) no puede exceder el total de la venta (S/ ${montoTotal.toFixed(2)})`),
-          { code: 'PAGO_INICIAL_EXCEDE_TOTAL' }
+        throw new ValidationError(
+          `El pago inicial (S/ ${pagoInicial.toFixed(2)}) no puede exceder el total de la venta (S/ ${montoTotal.toFixed(2)})`,
+          { pagoInicial, montoTotal }
         );
       }
 
@@ -445,99 +437,7 @@ export const createVenta = async (
       }
     }
 
-    // 9. Emitir comprobante electrónico (Mock o Nubefact según ENV)
-    try {
-      const facturador = obtenerFacturador();
-
-      // Obtener datos completos del cliente para facturación
-      const clienteData = data.cliente_id
-        ? await tx.clientes.findFirst({
-          where: { id: data.cliente_id, tenant_id: tenantId },
-          select: {
-            nombre: true,
-            documento_identidad: true,
-            ruc: true,
-            razon_social: true,
-            direccion: true,
-            email: true,
-          }
-        })
-        : null;
-
-      // Obtener datos del tenant para facturación
-      const tenant = await tx.tenants.findFirst({
-        where: { id: tenantId },
-        select: {
-          nombre_empresa: true,
-          configuracion: true,
-        }
-      });
-
-      const config = tenant?.configuracion as any;
-
-      // Obtener nombres de productos para los items
-      const productosMap = new Map();
-      for (const det of detallesConIGV) {
-        const producto = await tx.productos.findFirst({
-          where: { id: det.producto_id, tenant_id: tenantId },
-          select: { nombre: true, unidad_medida: { select: { codigo: true } } }
-        });
-        productosMap.set(det.producto_id, producto);
-      }
-
-      // Preparar datos para el facturador (según interfaz DatosComprobante)
-      const datosComprobante: DatosComprobante = {
-        tipo_documento: tipoComprobante,
-        serie: serie.codigo,
-        numero: nuevoCorrelativo,
-        fecha_emision: new Date(),
-        cliente_documento: clienteData?.ruc || clienteData?.documento_identidad || null,
-        cliente_nombre: clienteData?.razon_social || clienteData?.nombre || 'CLIENTE GENERICO',
-        items: detallesConIGV.map((det) => {
-          const producto = productosMap.get(det.producto_id);
-          return {
-            descripcion: producto?.nombre || `Producto ${det.producto_id}`,
-            cantidad: det.cantidad,
-            precio_unitario: det.precio_unitario,
-            valor_unitario: det.valor_unitario,
-            igv_item: det.igv_total,
-          };
-        }),
-        total_gravado: Number(detallesConIGV.reduce((sum, d) => sum + (d.valor_unitario * d.cantidad), 0).toFixed(2)),
-        total_igv: Number(detallesConIGV.reduce((sum, d) => sum + d.igv_total, 0).toFixed(2)),
-        total: Number(total.toFixed(2)),
-      };
-
-      // Emitir comprobante (asíncrono, no bloquea)
-      const respuestaFacturacion = await facturador.emitirComprobante(datosComprobante);
-
-      // Actualizar venta con datos de SUNAT
-      await tx.ventas.update({
-        where: { id: nuevaVenta.id },
-        data: {
-          estado_sunat: respuestaFacturacion.estado,
-          xml_url: respuestaFacturacion.xml_url,
-          cdr_url: respuestaFacturacion.cdr_url,
-          hash_cpe: respuestaFacturacion.hash_cpe,
-          codigo_qr: respuestaFacturacion.codigo_qr,
-        },
-      });
-
-      console.log(`✅ [VENTA] Comprobante ${serie.codigo}-${nuevoCorrelativo} emitido con estado: ${respuestaFacturacion.estado}`);
-    } catch (error) {
-      // Si falla la emisión, no revertir la venta pero loguearlo
-      console.error('❌ [VENTA] Error al emitir comprobante:', error);
-
-      // Actualizar estado a PENDIENTE para retry manual
-      await tx.ventas.update({
-        where: { id: nuevaVenta.id },
-        data: {
-          estado_sunat: 'PENDIENTE',
-        },
-      });
-    }
-
-    // 10. [TRAZABILIDAD FINANCIERA] Registrar movimiento de caja automático para CONTADO
+    // 9. [TRAZABILIDAD FINANCIERA] Registrar movimiento de caja automático para CONTADO
     if (data.condicion_pago === 'CONTADO' && sesionCajaId) {
       await tx.movimientosCaja.create({
         data: {
@@ -554,8 +454,112 @@ export const createVenta = async (
       console.log(`💰 [VENTA] Ingreso automático registrado en caja: S/ ${total.toFixed(2)}`);
     }
 
-    return nuevaVenta;
+    // Obtener datos necesarios para facturación DENTRO de la transacción
+    // pero la llamada HTTP al facturador será FUERA
+    const clienteData = data.cliente_id
+      ? await tx.clientes.findFirst({
+        where: { id: data.cliente_id, tenant_id: tenantId },
+        select: {
+          nombre: true,
+          documento_identidad: true,
+          ruc: true,
+          razon_social: true,
+          direccion: true,
+          email: true,
+        }
+      })
+      : null;
+
+    // Obtener nombres de productos para los items
+    const productosMap = new Map<number, { nombre: string }>();
+    for (const det of detallesConIGV) {
+      const producto = await tx.productos.findFirst({
+        where: { id: det.producto_id, tenant_id: tenantId },
+        select: { nombre: true }
+      });
+      if (producto) {
+        productosMap.set(det.producto_id, producto);
+      }
+    }
+
+    // Retornar todos los datos necesarios para facturación posterior
+    return {
+      venta: nuevaVenta,
+      datosFacturacion: {
+        tipoComprobante,
+        serieCodigo: serie.codigo,
+        nuevoCorrelativo,
+        clienteData,
+        productosMap,
+        detallesConIGV,
+        total,
+      }
+    };
   });
+
+  // ========================================================
+  // PASO 2: FACTURACIÓN FUERA DE LA TRANSACCIÓN
+  // ========================================================
+  // CRÍTICO: La llamada HTTP al facturador ocurre DESPUÉS de cerrar
+  // la transacción para evitar bloqueos de BD durante llamadas lentas.
+
+  try {
+    const facturador = obtenerFacturador();
+    const { datosFacturacion, venta } = resultadoTx;
+
+    // Preparar datos para el facturador (según interfaz DatosComprobante)
+    const datosComprobante: DatosComprobante = {
+      tipo_documento: datosFacturacion.tipoComprobante,
+      serie: datosFacturacion.serieCodigo,
+      numero: datosFacturacion.nuevoCorrelativo,
+      fecha_emision: new Date(),
+      cliente_documento: datosFacturacion.clienteData?.ruc || datosFacturacion.clienteData?.documento_identidad || null,
+      cliente_nombre: datosFacturacion.clienteData?.razon_social || datosFacturacion.clienteData?.nombre || 'CLIENTE GENERICO',
+      items: datosFacturacion.detallesConIGV.map((det) => {
+        const producto = datosFacturacion.productosMap.get(det.producto_id);
+        return {
+          descripcion: producto?.nombre || `Producto ${det.producto_id}`,
+          cantidad: det.cantidad,
+          precio_unitario: det.precio_unitario,
+          valor_unitario: det.valor_unitario,
+          igv_item: det.igv_total,
+        };
+      }),
+      total_gravado: Number(datosFacturacion.detallesConIGV.reduce((sum, d) => sum + (d.valor_unitario * d.cantidad), 0).toFixed(2)),
+      total_igv: Number(datosFacturacion.detallesConIGV.reduce((sum, d) => sum + d.igv_total, 0).toFixed(2)),
+      total: Number(datosFacturacion.total.toFixed(2)),
+    };
+
+    // Emitir comprobante (llamada HTTP que puede tardar segundos)
+    const respuestaFacturacion = await facturador.emitirComprobante(datosComprobante);
+
+    // Actualizar venta con datos de SUNAT (operación separada, no bloquea otras ventas)
+    await db.ventas.update({
+      where: { id: venta.id },
+      data: {
+        estado_sunat: respuestaFacturacion.estado,
+        xml_url: respuestaFacturacion.xml_url,
+        cdr_url: respuestaFacturacion.cdr_url,
+        hash_cpe: respuestaFacturacion.hash_cpe,
+        codigo_qr: respuestaFacturacion.codigo_qr,
+      },
+    });
+
+    console.log(`✅ [VENTA] Comprobante ${datosFacturacion.serieCodigo}-${datosFacturacion.nuevoCorrelativo} emitido con estado: ${respuestaFacturacion.estado}`);
+  } catch (error) {
+    // Si falla la emisión, la venta ya está guardada (no hacer rollback)
+    console.error('❌ [VENTA] Error al emitir comprobante:', error);
+
+    // Actualizar estado a PENDIENTE para retry manual (fuera de transacción)
+    await db.ventas.update({
+      where: { id: resultadoTx.venta.id },
+      data: {
+        estado_sunat: 'PENDIENTE',
+      },
+    });
+  }
+
+  return resultadoTx.venta;
 };
 
 /**
@@ -591,9 +595,7 @@ export const deleteVentaByIdAndTenant = async (tenantId: number, id: number) => 
 
   // RESTRICCIÓN FISCAL: No permitir eliminar comprobantes aceptados por SUNAT
   if (existing.estado_sunat === 'ACEPTADO') {
-    const err = new Error('No se puede eliminar un comprobante aceptado por SUNAT. Use Nota de Crédito para anulaciones.');
-    (err as any).code = 'COMPROBANTE_SUNAT_ACEPTADO';
-    throw err;
+    throw new ComprobanteAceptadoError();
   }
 
   // Eliminar en cascada los detalles (configurado en Prisma)

@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as clienteModel from '../models/cliente.model';
+import * as clienteModel from '../services/clientes.service';
 import { CreateClienteSchema, UpdateClienteSchema } from '../dtos/cliente.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 

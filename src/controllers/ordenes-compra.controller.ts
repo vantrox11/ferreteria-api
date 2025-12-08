@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as ordenCompraModel from '../models/orden-compra.model';
+import * as ordenCompraModel from '../services/ordenes-compra.service';
 import { EstadoOrdenCompra } from '@prisma/client';
 
 /**

@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as tenantModel from '../models/tenant.model';
+import * as tenantModel from '../services/tenants.service';
 import { UpdateTenantConfiguracionSchema, UpdateTenantConfigFiscalSchema } from '../dtos/tenant.dto';
 import { Prisma } from '@prisma/client';
 

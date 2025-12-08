@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as productoModel from '../models/producto.model';
+import * as productoModel from '../services/productos.service';
 import { CreateProductoSchema, UpdateProductoSchema } from '../dtos/producto.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 

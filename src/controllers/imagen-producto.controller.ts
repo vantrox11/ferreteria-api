@@ -2,7 +2,7 @@ import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 import * as storageService from '../services/storage.service';
-import * as productoModel from '../models/producto.model';
+import * as productoModel from '../services/productos.service';
 import * as auditService from '../services/audit.service';
 
 /**

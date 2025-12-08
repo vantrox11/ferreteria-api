@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as reporteModel from '../models/reporte.model';
+import * as reporteModel from '../services/reportes.service';
 // Validación manejada por middleware validateRequest
 
 /**

@@ -2,7 +2,7 @@ import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import bcrypt from 'bcrypt';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as usuarioModel from '../models/usuario.model';
+import * as usuarioModel from '../services/usuarios.service';
 import { CreateUsuarioSchema, UpdateUsuarioSchema } from '../dtos/usuario.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 

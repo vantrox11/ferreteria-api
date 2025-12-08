@@ -327,6 +327,7 @@ model VentaDetalles {
   @@index([tenant_id])
   @@index([venta_id])
   @@index([producto_id])
+  @@index([tenant_id, venta_id]) // Optimiza: "Dame detalles de venta X del tenant Y"
 }
 
 model Pedidos {

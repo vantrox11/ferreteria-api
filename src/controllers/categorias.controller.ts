@@ -1,7 +1,7 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
-import * as categoriaModel from '../models/categoria.model';
+import * as categoriaModel from '../services/categorias.service';
 import { CreateCategoriaSchema, UpdateCategoriaSchema } from '../dtos/categoria.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 

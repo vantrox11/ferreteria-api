@@ -1,6 +1,6 @@
 import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
-import serieModel from '../models/serie.model';
+import serieModel from '../services/series.service';
 import { CreateSerieSchema, UpdateSerieSchema } from '../dtos/serie.dto';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 
