@@ -122,7 +122,7 @@ export const registrarPago = async (
     // 6. Actualizar estado_pago de la Venta
     if (cuentaPorCobrar.venta) {
       const nuevoEstadoPagoVenta = nuevoSaldo === 0 ? 'PAGADO' : 'PARCIAL';
-      
+
       await tx.ventas.update({
         where: { id: cuentaPorCobrar.venta.id },
         data: {
@@ -132,7 +132,7 @@ export const registrarPago = async (
       });
 
       console.log(`  ✅ Estado venta actualizado: ${nuevoEstadoPagoVenta}`);
-      
+
       // 7. [TRAZABILIDAD FINANCIERA] Registrar ingreso automático en caja
       if (data.sesion_caja_id) {
         // Obtener información de la venta para la descripción
@@ -140,11 +140,11 @@ export const registrarPago = async (
           where: { id: cuentaPorCobrar.venta.id },
           include: { serie: true },
         });
-        
+
         const descripcion = ventaInfo?.serie
           ? `Pago por Venta ${ventaInfo.serie.codigo}-${ventaInfo.numero_comprobante}`
           : `Pago de cuenta por cobrar #${cuentaId}`;
-        
+
         await tx.movimientosCaja.create({
           data: {
             tenant_id: tenantId,
@@ -152,11 +152,11 @@ export const registrarPago = async (
             tipo: 'INGRESO',
             monto: montoPago,
             descripcion,
-            referencia_tipo: 'PAGO',
-            referencia_id: pago.id.toString(),
+            pago_id: pago.id, // FK explícita
+            es_manual: false,
           },
         });
-        
+
         console.log(`  💰 Ingreso automático registrado en caja: S/ ${montoPago.toFixed(2)}`);
       }
     }

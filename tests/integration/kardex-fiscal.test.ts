@@ -24,8 +24,8 @@ describe('KARDEX FISCAL - Integración', () => {
   beforeAll(async () => {
     // Crear tenant de prueba
     const tenant = await db.tenants.create({
-      data: { 
-        nombre_empresa: 'KARDEX_TEST', 
+      data: {
+        nombre_empresa: 'KARDEX_TEST',
         subdominio: 'kardex-test',
         isActive: true,
       },
@@ -106,7 +106,7 @@ describe('KARDEX FISCAL - Integración', () => {
     await db.ventas.deleteMany({ where: { tenant_id: tenantId } });
     await db.ordenCompraDetalles.deleteMany({ where: { tenant_id: tenantId } });
     await db.ordenesCompra.deleteMany({ where: { tenant_id: tenantId } });
-    await db.inventarioAjustes.deleteMany({ where: { tenant_id: tenantId } });
+    await db.movimientosInventario.deleteMany({ where: { tenant_id: tenantId } });
     await db.productos.deleteMany({ where: { tenant_id: tenantId } });
     await db.clientes.deleteMany({ where: { tenant_id: tenantId } });
     await db.proveedores.deleteMany({ where: { tenant_id: tenantId } });
@@ -117,7 +117,7 @@ describe('KARDEX FISCAL - Integración', () => {
   });
 
   describe('📋 Formato de Referencias Documentales', () => {
-    
+
     test('Venta debe mostrar formato SERIE-NUMERO (B001-000001)', async () => {
       // Crear venta con serie y número
       const venta = await db.ventas.create({
@@ -146,7 +146,7 @@ describe('KARDEX FISCAL - Integración', () => {
       });
 
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       const movimientoVenta = kardex.movimientos.find(m => m.tipo === 'venta');
@@ -188,7 +188,7 @@ describe('KARDEX FISCAL - Integración', () => {
       });
 
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       const movimientoCompra = kardex.movimientos.find(m => m.tipo === 'compra');
@@ -208,21 +208,24 @@ describe('KARDEX FISCAL - Integración', () => {
         },
       });
 
-      // Crear ajuste manual
-      const ajuste = await db.inventarioAjustes.create({
+      // Crear ajuste manual usando MovimientosInventario
+      const ajuste = await db.movimientosInventario.create({
         data: {
           tenant_id: tenantId,
           producto_id: productoId,
-          tipo: 'entrada',
+          tipo_movimiento: 'ENTRADA_AJUSTE',
           cantidad: 5,
+          saldo_anterior: 0,
+          saldo_nuevo: 5,
+          ajuste_manual: true, // FK explícita para ajustes manuales
           motivo: 'Reposición por devolución',
           usuario_id: usuario.id,
-          created_at: new Date('2024-01-07T12:00:00Z'),  // Entre venta (2024-01-05) y compra (2024-01-10)
+          created_at: new Date('2024-01-07T12:00:00Z'),
         },
       });
 
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       const movimientoAjuste = kardex.movimientos.find(m => m.tipo === 'ajuste_entrada');
@@ -231,16 +234,16 @@ describe('KARDEX FISCAL - Integración', () => {
       expect(movimientoAjuste!.referencia).toBe(`ADJ-${String(ajuste.id).padStart(4, '0')}`);
 
       // Limpieza
-      await db.inventarioAjustes.delete({ where: { id: ajuste.id } });
+      await db.movimientosInventario.delete({ where: { id: ajuste.id } });
       await db.usuarios.delete({ where: { id: usuario.id } });
     });
   });
 
   describe('📄 Información Fiscal Completa', () => {
-    
+
     test('Venta debe incluir tercero y tercero_documento (DNI cliente)', async () => {
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       const movimientoVenta = kardex.movimientos.find(m => m.tipo === 'venta');
@@ -251,7 +254,7 @@ describe('KARDEX FISCAL - Integración', () => {
 
     test('Compra debe incluir tercero y tercero_documento (RUC proveedor)', async () => {
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       const movimientoCompra = kardex.movimientos.find(m => m.tipo === 'compra');
@@ -262,7 +265,7 @@ describe('KARDEX FISCAL - Integración', () => {
 
     test('Kardex debe mantener orden cronológico descendente', async () => {
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       // Verificar que hay al menos 1 movimiento (puede ser 0 si se ejecuta solo este test)
@@ -314,7 +317,7 @@ describe('KARDEX FISCAL - Integración', () => {
       });
 
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       const movimientoLegacy = kardex.movimientos.find(
@@ -330,10 +333,10 @@ describe('KARDEX FISCAL - Integración', () => {
   });
 
   describe('📊 Cálculo de Saldos con Datos Fiscales', () => {
-    
+
     test('Saldo debe calcularse correctamente incluyendo todos los movimientos', async () => {
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
 
       // Verificar que el último movimiento (más antiguo) tiene el saldo más bajo
@@ -349,13 +352,13 @@ describe('KARDEX FISCAL - Integración', () => {
 
     test('Saldo final debe coincidir con stock actual del producto', async () => {
       const kardex = await generarKardexCompleto(tenantId, productoId);
-      
+
       if (!kardex) throw new Error('Kardex null');
-      
+
       const producto = await db.productos.findUnique({ where: { id: productoId } });
 
       expect(Number(kardex.producto.stock)).toBe(Number(producto!.stock));
-      
+
       // El movimiento más reciente debe tener saldo = stock actual
       if (kardex.movimientos.length > 0) {
         expect(kardex.movimientos[0].saldo).toBe(Number(producto!.stock));

@@ -1,5 +1,6 @@
 import express, { type Application, type Request, type Response } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -37,6 +38,23 @@ import marcasRoutes from './routes/marcas.routes';
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3001');
+
+// Rate Limiting - Protección contra DDoS y fuerza bruta
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 5, // 5 intentos de login por minuto
+  message: { message: 'Demasiados intentos de login. Intente de nuevo en 1 minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 100, // 100 requests por minuto
+  message: { message: 'Demasiadas solicitudes. Intente de nuevo en un momento.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Configuración de middlewares
 // CORS dinámico por entorno — soporta lista y comodín *.localhost:5173
@@ -117,10 +135,9 @@ app.get('/api/healthcheck', async (req: Request, res: Response) => {
 });
 
 // Rutas de la API
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes); // Rate limit estricto para login
 // Rutas públicas (sin autenticación JWT) - deben ir ANTES de las protegidas
-app.use('/api/public', publicRoutes);
-// Rutas protegidas (requieren JWT)
+app.use('/api/public', apiLimiter, publicRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/categorias', categoriasRoutes);
 app.use('/api/clientes', clientesRoutes);

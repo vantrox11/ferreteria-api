@@ -23,13 +23,18 @@ export const CreateMovimientoCajaSchema = registry.register(
       description: 'Descripción detallada del movimiento con formato: "{Acción} por {Documento} {Serie}-{Numero}"',
       example: 'Ingreso por Venta B001-00123',
     }),
-    referencia_tipo: z.enum(['VENTA', 'NOTA_CREDITO', 'COMPRA', 'PAGO', 'MANUAL', 'AJUSTE']).optional().openapi({
-      description: 'Tipo de documento que origina el movimiento (opcional)',
-      example: 'VENTA',
+    // FKs explícitas para integridad referencial (opcionales, mutuamente exclusivas)
+    venta_id: z.number().int().positive().optional().openapi({
+      description: 'ID de la venta asociada (opcional)',
+      example: 123,
     }),
-    referencia_id: z.string().max(50).optional().openapi({
-      description: 'ID del documento referenciado (opcional)',
-      example: '123',
+    nota_credito_id: z.number().int().positive().optional().openapi({
+      description: 'ID de la nota de crédito asociada (opcional)',
+      example: 45,
+    }),
+    pago_id: z.number().int().positive().optional().openapi({
+      description: 'ID del pago asociado (opcional)',
+      example: 67,
     }),
   })
 );

@@ -43,7 +43,7 @@ export const findInventarioAjustesPaginados = async (
   const whereClause: Prisma.MovimientosInventarioWhereInput = {
     tenant_id: tenantId,
     tipo_movimiento: { in: tiposMovimiento },
-    referencia_tipo: 'AJUSTE',
+    ajuste_manual: true, // Solo ajustes manuales
     ...(producto_id && { producto_id }),
     ...(fecha_inicio && { created_at: { gte: fecha_inicio } }),
     ...(fecha_fin && { created_at: { lte: fecha_fin } }),
@@ -99,7 +99,7 @@ export const findInventarioAjusteByIdAndTenant = async (
     where: {
       id,
       tenant_id: tenantId,
-      referencia_tipo: 'AJUSTE',
+      ajuste_manual: true, // Solo ajustes manuales
     },
     include: {
       producto: { select: { id: true, nombre: true, sku: true, stock: true } },
@@ -146,16 +146,9 @@ export const createInventarioAjuste = async (
       productoId: data.producto_id,
       tipo: tipoMovimiento,
       cantidad: Number(data.cantidad),
-      referenciaTipo: 'AJUSTE',
-      referenciaId: 0, // Se actualizará después
+      ajusteManual: true,
       motivo: data.motivo,
       usuarioId,
-    });
-
-    // Actualizar referencia_id con el ID real del movimiento
-    await tx.movimientosInventario.update({
-      where: { id: resultado.id },
-      data: { referencia_id: resultado.id },
     });
 
     // Obtener el movimiento completo para devolverlo
@@ -189,7 +182,7 @@ export const deleteInventarioAjusteByIdAndTenant = async (
 ): Promise<null> => {
   // Verificar que existe
   const existing = await db.movimientosInventario.findFirst({
-    where: { id, tenant_id: tenantId, referencia_tipo: 'AJUSTE' },
+    where: { id, tenant_id: tenantId, ajuste_manual: true },
   });
 
   if (!existing) return null;

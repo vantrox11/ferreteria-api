@@ -23,27 +23,38 @@ cloudinary.config({
 });
 
 /**
+ * Tipos de recursos soportados por Cloudinary
+ */
+export type CloudinaryResourceType = 'image' | 'video' | 'raw' | 'auto';
+
+/**
  * Sube un archivo a Cloudinary
  * @param buffer Buffer del archivo
  * @param folder Carpeta en Cloudinary (ej: "productos")
  * @param publicId ID público opcional (ej: "producto-123")
+ * @param resourceType Tipo de recurso: 'image' | 'video' | 'raw' | 'auto' (default: 'image')
  * @returns URL pública del archivo subido
  */
 export const uploadToCloudinary = async (
   buffer: Buffer,
   folder: string = 'productos',
-  publicId?: string
+  publicId?: string,
+  resourceType: CloudinaryResourceType = 'image'
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const uploadOptions: any = {
       folder,
-      resource_type: 'image',
-      transformation: [
+      resource_type: resourceType,
+    };
+
+    // Solo aplicar transformaciones a imágenes
+    if (resourceType === 'image') {
+      uploadOptions.transformation = [
         { width: 1200, height: 1200, crop: 'limit' }, // Máximo 1200x1200
         { quality: 'auto:good' }, // Optimización automática
         { fetch_format: 'auto' }, // Formato automático (webp si el navegador lo soporta)
-      ],
-    };
+      ];
+    }
 
     if (publicId) {
       uploadOptions.public_id = publicId;
@@ -54,7 +65,7 @@ export const uploadToCloudinary = async (
       (error, result) => {
         if (error) {
           console.error('[StorageService] Error al subir a Cloudinary:', error);
-          return reject(new Error('Error al subir imagen a Cloudinary'));
+          return reject(new Error('Error al subir archivo a Cloudinary'));
         }
         if (!result) {
           return reject(new Error('No se recibió respuesta de Cloudinary'));

@@ -15,13 +15,13 @@ export interface RespuestaFacturacion {
   exito: boolean;
   mensaje: string;
   estado: 'ACEPTADO' | 'RECHAZADO' | 'PENDIENTE';
-  
+
   // Datos SUNAT
   xml_url?: string;
   cdr_url?: string;
   hash_cpe?: string;
   codigo_qr?: string;
-  
+
   // Códigos de error (si falla)
   codigo_error?: string;
   detalle_error?: string;
@@ -37,7 +37,7 @@ export interface DatosComprobante {
   fecha_emision: Date;
   cliente_documento: string | null;
   cliente_nombre: string;
-  
+
   // Items
   items: {
     descripcion: string;
@@ -46,7 +46,7 @@ export interface DatosComprobante {
     valor_unitario: number;
     igv_item: number;
   }[];
-  
+
   // Totales
   total_gravado: number;
   total_igv: number;
@@ -72,17 +72,17 @@ export interface DatosGuiaRemision {
   numero: number;
   fecha_emision: Date;
   fecha_inicio_traslado: Date;
-  
+
   // Motivo
   motivo_traslado: string;
   descripcion_motivo?: string;
-  
+
   // Direcciones
   direccion_partida: string;
   ubigeo_partida?: string;
   direccion_llegada: string;
   ubigeo_llegada?: string;
-  
+
   // Transporte
   modalidad_transporte: 'PRIVADO' | 'PUBLICO';
   ruc_transportista?: string;
@@ -90,11 +90,11 @@ export interface DatosGuiaRemision {
   placa_vehiculo?: string;
   licencia_conducir?: string;
   nombre_conductor?: string;
-  
+
   // Carga
   peso_bruto_total: number;
   numero_bultos: number;
-  
+
   // Items
   items: {
     descripcion: string;
@@ -124,14 +124,14 @@ export interface IFacturador {
  * Uso: Desarrollo y Testing local
  */
 export class MockFacturadorService implements IFacturador {
-  
+
   /**
    * Simula latencia de red (1 segundo)
    */
   private async simularLatencia(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 1000));
   }
-  
+
   /**
    * Genera un hash fake pero realista
    */
@@ -143,41 +143,42 @@ export class MockFacturadorService implements IFacturador {
     }
     return hash;
   }
-  
+
   /**
    * Genera URLs mock para storage
    */
   private generarUrlsMock(tipoDoc: string, serie: string, numero: number) {
     const timestamp = Date.now();
     const baseUrl = 'http://mock-storage.local'; // URL falsa pero válida
-    
+
     return {
       xml_url: `${baseUrl}/xml/${tipoDoc}-${serie}-${numero}-${timestamp}.xml`,
       cdr_url: `${baseUrl}/cdr/R-${tipoDoc}-${serie}-${numero}-${timestamp}.xml`,
     };
   }
-  
+
   /**
    * Emite un comprobante (Boleta o Factura) - MOCK
    */
   async emitirComprobante(datos: DatosComprobante): Promise<RespuestaFacturacion> {
+    // Logs con datos ofuscados para privacidad
     console.log('🟢 [MOCK FACTURADOR] Emitiendo comprobante:', {
       tipo: datos.tipo_documento,
       serie: datos.serie,
       numero: datos.numero,
-      cliente: datos.cliente_nombre,
-      total: datos.total,
+      cliente: datos.cliente_nombre.substring(0, 3) + '***', // Ofuscado
+      items: datos.items.length,
     });
-    
+
     // Simular latencia de red
     await this.simularLatencia();
-    
+
     // Generar datos fake
     const urls = this.generarUrlsMock(datos.tipo_documento, datos.serie, datos.numero);
     const hash = this.generarHashFake();
-    
+
     console.log('✅ [MOCK FACTURADOR] Comprobante ACEPTADO por SUNAT (simulado)');
-    
+
     return {
       exito: true,
       mensaje: 'Comprobante aceptado por SUNAT (MOCK)',
@@ -188,27 +189,27 @@ export class MockFacturadorService implements IFacturador {
       codigo_qr: `https://mock-qr.com/${hash}`, // QR fake
     };
   }
-  
+
   /**
    * Emite una Nota de Crédito - MOCK
    */
   async emitirNotaCredito(datos: DatosNotaCredito): Promise<RespuestaFacturacion> {
+    // Logs con datos ofuscados para privacidad
     console.log('🟠 [MOCK FACTURADOR] Emitiendo Nota de Crédito:', {
       tipo: datos.tipo_documento,
       serie: datos.serie,
       numero: datos.numero,
       referencia: `${datos.documento_referencia_serie}-${datos.documento_referencia_numero}`,
-      motivo: datos.motivo,
-      total: datos.total,
+      motivo: datos.motivo.substring(0, 20) + '...', // Truncado
     });
-    
+
     await this.simularLatencia();
-    
+
     const urls = this.generarUrlsMock('NC', datos.serie, datos.numero);
     const hash = this.generarHashFake();
-    
+
     console.log('✅ [MOCK FACTURADOR] Nota de Crédito ACEPTADA por SUNAT (simulado)');
-    
+
     return {
       exito: true,
       mensaje: 'Nota de Crédito aceptada por SUNAT (MOCK)',
@@ -218,7 +219,7 @@ export class MockFacturadorService implements IFacturador {
       hash_cpe: hash,
     };
   }
-  
+
   /**
    * Emite una Guía de Remisión - MOCK
    */
@@ -231,14 +232,14 @@ export class MockFacturadorService implements IFacturador {
       bultos: datos.numero_bultos,
       modalidad: datos.modalidad_transporte,
     });
-    
+
     await this.simularLatencia();
-    
+
     const urls = this.generarUrlsMock('GRE', datos.serie, datos.numero);
     const hash = this.generarHashFake();
-    
+
     console.log('✅ [MOCK FACTURADOR] Guía de Remisión ACEPTADA por SUNAT (simulado)');
-    
+
     return {
       exito: true,
       mensaje: 'Guía de Remisión aceptada por SUNAT (MOCK)',
@@ -268,10 +269,10 @@ export class NubefactService implements IFacturador {
 
   constructor() {
     const environment = process.env.NUBEFACT_ENV || 'sandbox';
-    this.baseUrl = environment === 'production' 
+    this.baseUrl = environment === 'production'
       ? 'https://api.nubefact.com/api/v1'
       : 'https://demo-api.nubefact.com/api/v1';
-    
+
     this.token = process.env.NUBEFACT_TOKEN || '';
     this.ruc = process.env.NUBEFACT_RUC || '';
 
@@ -284,12 +285,13 @@ export class NubefactService implements IFacturador {
    * Emite un comprobante a través de Nubefact
    */
   async emitirComprobante(datos: DatosComprobante): Promise<RespuestaFacturacion> {
+    // Logs con datos ofuscados para privacidad (producción)
     console.log('🌐 [NUBEFACT] Emitiendo comprobante:', {
       tipo: datos.tipo_documento,
       serie: datos.serie,
       numero: datos.numero,
-      cliente: datos.cliente_nombre,
-      total: datos.total,
+      cliente: datos.cliente_nombre.substring(0, 3) + '***', // Ofuscado
+      items: datos.items.length,
     });
 
     try {
@@ -592,20 +594,20 @@ export class NubefactService implements IFacturador {
  */
 export function obtenerFacturador(): IFacturador {
   const modo = process.env.FACTURADOR_MODE || 'MOCK';
-  
+
   switch (modo.toUpperCase()) {
     case 'MOCK':
       console.log('📦 [FACTURADOR] Usando Mock (simulación local sin costos)');
       return new MockFacturadorService();
-    
+
     case 'NUBEFACT':
       console.log('🌐 [FACTURADOR] Usando Nubefact (conexión real a SUNAT)');
       return new NubefactService();
-    
+
     case 'SIMULATOR':
       console.log('🔬 [FACTURADOR] Usando Simulador Avanzado (XML/CDR válidos)');
       return new MockFacturadorService(); // TODO: Crear SimulatorService con XML real
-    
+
     default:
       console.warn(`⚠️ [FACTURADOR] Modo desconocido: ${modo}. Usando Mock por defecto.`);
       console.warn('⚠️ Modos válidos: MOCK, NUBEFACT, SIMULATOR');

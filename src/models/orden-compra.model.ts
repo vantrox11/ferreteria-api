@@ -271,8 +271,7 @@ export const recibirOrdenCompra = async (
         tipo: 'ENTRADA_COMPRA',
         cantidad: Number(detalle.cantidad),
         costoUnitario: detalleCompleto ? Number(detalleCompleto.costo_unitario) : undefined,
-        referenciaTipo: 'COMPRA',
-        referenciaId: id,
+        ordenCompraId: id, // FK explícita
       });
     }
 

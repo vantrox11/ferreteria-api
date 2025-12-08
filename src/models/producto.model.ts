@@ -2,24 +2,29 @@ import { db } from '../config/db';
 import { type Prisma } from '@prisma/client';
 import { type CreateProductoDTO, type UpdateProductoDTO } from '../dtos/producto.dto';
 import * as tenantModel from './tenant.model';
+import Decimal from 'decimal.js';
+
+// Configurar Decimal.js para alta precisión
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 /**
  * Calcula precio_venta desde precio_base según afectación IGV
+ * Usa Decimal.js para precisión exacta
  */
 const calcularPrecioVenta = async (producto: any, tenantId: number): Promise<any> => {
   const fiscalConfig = await tenantModel.getTenantFiscalConfig(tenantId);
-  
-  let precio_venta = Number(producto.precio_base);
-  
+
+  let precio_venta = new Decimal(producto.precio_base);
+
   // Si NO está exonerado regionalmente Y el producto es GRAVADO, aplicar IGV
   if (!fiscalConfig.exonerado_regional && producto.afectacion_igv === 'GRAVADO') {
-    const tasa = fiscalConfig.tasa_impuesto / 100;
-    precio_venta = Number(producto.precio_base) * (1 + tasa);
+    const tasa = new Decimal(fiscalConfig.tasa_impuesto).dividedBy(100);
+    precio_venta = precio_venta.times(new Decimal(1).plus(tasa));
   }
-  
+
   return {
     ...producto,
-    precio_venta: Number(precio_venta.toFixed(2)),
+    precio_venta: precio_venta.toDecimalPlaces(2).toNumber(),
   };
 };
 
@@ -113,11 +118,11 @@ export const findProductoByIdAndTenant = async (tenantId: number, id: number) =>
   const producto = await db.productos.findFirst({
     where: { id, tenant_id: tenantId },
     include: {
-      categoria: { 
-        select: { 
+      categoria: {
+        select: {
           id: true,
-          nombre: true 
-        } 
+          nombre: true
+        }
       },
       marca: {
         select: {
@@ -135,9 +140,9 @@ export const findProductoByIdAndTenant = async (tenantId: number, id: number) =>
       },
     },
   });
-  
+
   if (!producto) return null;
-  
+
   return calcularPrecioVenta(producto, tenantId);
 };
 
@@ -170,19 +175,20 @@ export const createProducto = async (
   const fiscalConfig = await tenantModel.getTenantFiscalConfig(tenantId);
 
   // CÁLCULO INVERSO: precio_venta (CON IGV) → precio_base (SIN IGV)
-  let precio_base_calculado = precio_venta;
+  // Usa Decimal.js para precisión exacta
+  let precio_base_calculado = new Decimal(precio_venta);
 
   // Si el tenant NO está exonerado regionalmente Y el producto es GRAVADO
   if (!fiscalConfig.exonerado_regional && afectacion_igv === 'GRAVADO') {
-    const tasa = fiscalConfig.tasa_impuesto / 100; // 18% → 0.18
-    precio_base_calculado = precio_venta / (1 + tasa);
+    const tasa = new Decimal(fiscalConfig.tasa_impuesto).dividedBy(100);
+    precio_base_calculado = new Decimal(precio_venta).dividedBy(new Decimal(1).plus(tasa));
   }
   // Si el producto es EXONERADO/INAFECTO o tenant exonerado, precio_base = precio_venta
 
   const producto = await prismaClient.productos.create({
     data: {
       ...productoData,
-      precio_base: Number(precio_base_calculado.toFixed(2)),
+      precio_base: precio_base_calculado.toDecimalPlaces(4).toNumber(),
       afectacion_igv: afectacion_igv,
       tenant_id: tenantId,
       ...(categoria_id && { categoria_id }),
@@ -223,18 +229,19 @@ export const updateProductoByIdAndTenant = async (
   const updateData: any = { ...data };
 
   // CÁLCULO INVERSO si se proporciona precio_venta
+  // Usa Decimal.js para precisión exacta
   if (data.precio_venta !== undefined) {
     const fiscalConfig = await tenantModel.getTenantFiscalConfig(tenantId);
     const afectacion = data.afectacion_igv || existing.afectacion_igv;
 
-    let precio_base_calculado = data.precio_venta;
+    let precio_base_calculado = new Decimal(data.precio_venta);
 
     if (!fiscalConfig.exonerado_regional && afectacion === 'GRAVADO') {
-      const tasa = fiscalConfig.tasa_impuesto / 100;
-      precio_base_calculado = data.precio_venta / (1 + tasa);
+      const tasa = new Decimal(fiscalConfig.tasa_impuesto).dividedBy(100);
+      precio_base_calculado = new Decimal(data.precio_venta).dividedBy(new Decimal(1).plus(tasa));
     }
 
-    updateData.precio_base = Number(precio_base_calculado.toFixed(2));
+    updateData.precio_base = precio_base_calculado.toDecimalPlaces(4).toNumber();
     delete updateData.precio_venta; // No existe en el schema
   }
 
@@ -253,8 +260,8 @@ export const updateProductoByIdAndTenant = async (
 export const desactivarProductoByIdAndTenant = async (tenantId: number, id: number) => {
   const existing = await db.productos.findFirst({ where: { id, tenant_id: tenantId } });
   if (!existing) return null;
-  return db.productos.update({ 
-    where: { id }, 
-    data: { isActive: false } 
+  return db.productos.update({
+    where: { id },
+    data: { isActive: false }
   });
 };

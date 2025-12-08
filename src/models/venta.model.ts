@@ -280,13 +280,8 @@ export const createVenta = async (
         throw err;
       }
 
-      if (Number(producto.stock) < Number(detalle.cantidad)) {
-        const err = new Error(
-          `Stock insuficiente para producto "${producto.nombre}". Disponible: ${producto.stock}, Requerido: ${detalle.cantidad}`
-        );
-        (err as any).code = 'STOCK_INSUFICIENTE';
-        throw err;
-      }
+      // NOTA: La validación de stock se delega al servicio de inventario que usa
+      // bloqueo optimista para evitar race conditions. Ver inventario.service.ts
 
       // Calcular tasa de IGV según jerarquía (tenant → producto)
       const tasaIGV = calcularTasaIGV(
@@ -368,8 +363,7 @@ export const createVenta = async (
         tipo: 'SALIDA_VENTA',
         cantidad: detalle.cantidad,
         costoUnitario: detalle.precio_unitario,
-        referenciaTipo: 'VENTA',
-        referenciaId: nuevaVenta.id,
+        ventaId: nuevaVenta.id, // FK explícita
         usuarioId: usuarioId,
       });
     }
@@ -438,8 +432,8 @@ export const createVenta = async (
               tipo: 'INGRESO',
               monto: pagoInicial,
               descripcion: `Pago inicial por Venta ${serie.codigo}-${nuevoCorrelativo}`,
-              referencia_tipo: 'PAGO',
-              referencia_id: pago.id.toString(),
+              pago_id: pago.id, // FK explícita
+              es_manual: false,
             },
           });
 
@@ -552,8 +546,8 @@ export const createVenta = async (
           tipo: 'INGRESO',
           monto: Number(total.toFixed(2)),
           descripcion: `Ingreso por Venta ${serie.codigo}-${nuevoCorrelativo}`,
-          referencia_tipo: 'VENTA',
-          referencia_id: nuevaVenta.id.toString(),
+          venta_id: nuevaVenta.id, // FK explícita
+          es_manual: false,
         },
       });
 

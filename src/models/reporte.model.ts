@@ -80,7 +80,7 @@ export const generarKardexCompleto = async (
     where: {
       producto_id: productoId,
       tenant_id: tenantId,
-      referencia_tipo: 'AJUSTE',
+      ajuste_manual: true, // FK explícita para ajustes manuales
     },
     select: {
       id: true,

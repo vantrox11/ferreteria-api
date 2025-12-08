@@ -7,6 +7,8 @@
  * - Ajuste automático de cuentas por cobrar
  * - Envío a SUNAT (vía Mock o Real)
  * - Series controladas por tabla Series (no hardcoded)
+ * 
+ * ACTUALIZADO: Usa Decimal.js para precisión exacta en cálculos monetarios
  */
 
 import { db } from '../config/db';
@@ -14,32 +16,43 @@ import { CreateNotaCreditoDTO } from '../dtos/nota-credito.dto';
 import { obtenerFacturador, type DatosNotaCredito } from '../services/facturador.service';
 import { Prisma, Series_tipo_comprobante } from '@prisma/client';
 import { obtenerSerieActiva, incrementarCorrelativo, obtenerTipoComprobanteNC } from '../utils/series.helper';
+import Decimal from 'decimal.js';
+
+// Configurar Decimal.js para alta precisión
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
+
+const FACTOR_IGV = new Decimal('1.18');
+const TASA_IGV_DECIMAL = new Decimal('0.18');
 
 /**
  * Calcula totales fiscales de la Nota de Crédito
+ * Usa Decimal.js para precisión exacta
  * Retorna: total gravado, total IGV, total final
  */
 function calcularTotalesNC(detalles: CreateNotaCreditoDTO['detalles']) {
-  let totalGravado = 0;
-  let totalIGV = 0;
-  
+  let totalGravado = new Decimal(0);
+  let totalIGV = new Decimal(0);
+
   for (const detalle of detalles) {
-    const subtotal = detalle.precio_unitario * detalle.cantidad;
+    const precioUnitario = new Decimal(detalle.precio_unitario);
+    const cantidad = new Decimal(detalle.cantidad);
+    const subtotal = precioUnitario.times(cantidad);
+
     // Descomponer: precio_unitario = valor_unitario + IGV
     // valor_unitario = precio_unitario / 1.18
-    const valorUnitario = Number((detalle.precio_unitario / 1.18).toFixed(2));
-    const igvItem = Number((subtotal - (valorUnitario * detalle.cantidad)).toFixed(2));
-    
-    totalGravado += valorUnitario * detalle.cantidad;
-    totalIGV += igvItem;
+    const valorUnitario = precioUnitario.dividedBy(FACTOR_IGV);
+    const igvItem = subtotal.minus(valorUnitario.times(cantidad));
+
+    totalGravado = totalGravado.plus(valorUnitario.times(cantidad));
+    totalIGV = totalIGV.plus(igvItem);
   }
-  
-  const total = totalGravado + totalIGV;
-  
+
+  const total = totalGravado.plus(totalIGV);
+
   return {
-    totalGravado: Number(totalGravado.toFixed(2)),
-    totalIGV: Number(totalIGV.toFixed(2)),
-    total: Number(total.toFixed(2)),
+    totalGravado: totalGravado.toDecimalPlaces(2).toNumber(),
+    totalIGV: totalIGV.toDecimalPlaces(2).toNumber(),
+    total: total.toDecimalPlaces(2).toNumber(),
   };
 }
 
@@ -75,7 +88,7 @@ export const createNotaCredito = async (
         cliente: true,
       },
     });
-    
+
     if (!ventaOriginal) {
       throw Object.assign(
         new Error('Venta no encontrada'),
@@ -94,7 +107,7 @@ export const createNotaCredito = async (
         { code: 'VENTA_NO_ACEPTADA_SUNAT' }
       );
     }
-    
+
     // 2. Validación crítica: Verificar si ya existe una anulación/devolución total
     const anulacionTotal = await tx.notasCredito.findFirst({
       where: {
@@ -157,16 +170,16 @@ export const createNotaCredito = async (
     if (ventaOriginal.condicion_pago === 'CREDITO' && ventaOriginal.CuentasPorCobrar) {
       const cuentaPorCobrar = ventaOriginal.CuentasPorCobrar;
       const saldoPendienteActual = Number(cuentaPorCobrar.saldo_pendiente);
-      
+
       // Si el monto de la NC es mayor que el saldo pendiente, el cliente ya pagó más de lo que debía
       if (nuevoMonto > saldoPendienteActual) {
         const saldoAFavor = nuevoMonto - saldoPendienteActual;
-        
+
         console.warn(`⚠️ [NC] SALDO A FAVOR DEL CLIENTE detectado:`);
         console.warn(`  Saldo pendiente: S/ ${saldoPendienteActual.toFixed(2)}`);
         console.warn(`  Monto NC: S/ ${nuevoMonto.toFixed(2)}`);
         console.warn(`  Saldo a favor: S/ ${saldoAFavor.toFixed(2)}`);
-        
+
         throw Object.assign(
           new Error(
             `⚠️ ALERTA: Esta Nota de Crédito genera un SALDO A FAVOR DEL CLIENTE.\n\n` +
@@ -177,7 +190,7 @@ export const createNotaCredito = async (
             `- Cliente pagó: S/ ${Number(cuentaPorCobrar.monto_pagado).toFixed(2)}\n\n` +
             `Debe emitir un vale de devolución o registrar el saldo a favor para futuros consumos.`
           ),
-          { 
+          {
             code: 'SALDO_FAVOR_CLIENTE',
             saldo_a_favor: saldoAFavor,
             saldo_pendiente: saldoPendienteActual,
@@ -200,28 +213,28 @@ export const createNotaCredito = async (
         { code: 'NO_PUEDE_ANULAR_CON_PARCIALES' }
       );
     }
-    
+
     console.log('✅ [NC] Validaciones de negocio pasadas correctamente');
-    
+
     // 3. Obtener serie activa para NOTA_CREDITO
     const tipoComprobanteOriginal = ventaOriginal.serie?.tipo_comprobante || Series_tipo_comprobante.BOLETA;
     const tipoComprobanteNC = obtenerTipoComprobanteNC(tipoComprobanteOriginal);
-    
+
     const serieActiva = await obtenerSerieActiva(tenantId, tipoComprobanteNC, undefined, tx);
     const nuevoCorrelativo = await incrementarCorrelativo(serieActiva.id, tx);
-    
+
     console.log(`📄 [NC] Serie asignada: ${serieActiva.codigo}-${nuevoCorrelativo} (tipo: ${tipoComprobanteNC})`);
-    
+
     // 4. [CRÍTICO] DEVOLUCIÓN DE STOCK (si corresponde)
     // TIPOS QUE REGRESAN STOCK: Anulación (01), Devolución Total (07), Devolución Parcial (07)
     // TIPOS QUE NO TOCAN STOCK: Descuento Global (08), Corrección de texto (03)
-    if (data.devolver_stock && 
-        (data.tipo_nota === 'ANULACION_DE_LA_OPERACION' ||
-         data.tipo_nota === 'DEVOLUCION_TOTAL' || 
-         data.tipo_nota === 'DEVOLUCION_PARCIAL')) {
-      
+    if (data.devolver_stock &&
+      (data.tipo_nota === 'ANULACION_DE_LA_OPERACION' ||
+        data.tipo_nota === 'DEVOLUCION_TOTAL' ||
+        data.tipo_nota === 'DEVOLUCION_PARCIAL')) {
+
       console.log('📦 [NC] Devolviendo stock al inventario...');
-      
+
       for (const detalle of data.detalles) {
         // Incrementar stock del producto
         await tx.productos.update({
@@ -232,11 +245,11 @@ export const createNotaCredito = async (
             },
           },
         });
-        
+
         console.log(`  ✅ Producto ID ${detalle.producto_id}: +${detalle.cantidad} unidades`);
       }
     }
-    
+
     // 5. [CRÍTICO] AJUSTE DE DEUDA (si había crédito)
     // TIPOS QUE REDUCEN DEUDA: Anulación (01), Devolución Total/Parcial (07), Descuento Global (08)
     // TIPOS QUE NO TOCAN DEUDA: Corrección de texto (03)
@@ -250,10 +263,10 @@ export const createNotaCredito = async (
 
     if (ventaOriginal.CuentasPorCobrar && tiposQueReducenDeuda.includes(data.tipo_nota)) {
       const cuentaPorCobrar = ventaOriginal.CuentasPorCobrar;
-      
+
       console.log('💰 [NC] Ajustando cuenta por cobrar...');
       console.log(`  Saldo anterior: S/ ${cuentaPorCobrar.saldo_pendiente}`);
-      
+
       // Si la NC anula TODA la venta → Cancelar deuda completa
       if (data.tipo_nota === 'DEVOLUCION_TOTAL' || data.tipo_nota === 'ANULACION_DE_LA_OPERACION') {
         await tx.cuentasPorCobrar.update({
@@ -264,12 +277,12 @@ export const createNotaCredito = async (
             monto_total: 0,
           },
         });
-        
+
         console.log('  ✅ Deuda CANCELADA completamente');
       } else {
         // Devolución parcial, descuento global → Reducir el saldo pendiente
         const nuevoSaldo = Math.max(0, Number(cuentaPorCobrar.saldo_pendiente) - totalesNC.total);
-        
+
         await tx.cuentasPorCobrar.update({
           where: { id: cuentaPorCobrar.id },
           data: {
@@ -278,15 +291,15 @@ export const createNotaCredito = async (
             estado: nuevoSaldo === 0 ? 'PAGADA' : cuentaPorCobrar.estado,
           },
         });
-        
+
         console.log(`  ✅ Nuevo saldo: S/ ${nuevoSaldo}`);
       }
-      
+
       // Actualizar estado de pago en la venta
-      const nuevoEstadoPagoVenta = Number(ventaOriginal.CuentasPorCobrar.saldo_pendiente) === 0 
-        ? 'PAGADO' 
+      const nuevoEstadoPagoVenta = Number(ventaOriginal.CuentasPorCobrar.saldo_pendiente) === 0
+        ? 'PAGADO'
         : 'PARCIAL';
-      
+
       await tx.ventas.update({
         where: { id: ventaOriginal.id },
         data: {
@@ -302,7 +315,7 @@ export const createNotaCredito = async (
       console.log('💸 [NC] Se devolverá efectivo automáticamente');
       console.log(`  Monto: S/ ${totalesNC.total.toFixed(2)}`);
     }
-    
+
     // 6. Crear la Nota de Crédito
     const notaCredito = await tx.notasCredito.create({
       data: {
@@ -319,23 +332,25 @@ export const createNotaCredito = async (
         fecha_emision: new Date(),
       },
     });
-    
-    // Crear detalles de la NC
+
+    // Crear detalles de la NC con cálculos precisos usando Decimal.js
     for (const detalle of data.detalles) {
-      const valorUnitario = Number((detalle.precio_unitario / 1.18).toFixed(2));
-      const subtotal = detalle.precio_unitario * detalle.cantidad;
-      const igvItem = Number((subtotal - (valorUnitario * detalle.cantidad)).toFixed(2));
-      
+      const precioUnitario = new Decimal(detalle.precio_unitario);
+      const cantidad = new Decimal(detalle.cantidad);
+      const valorUnitario = precioUnitario.dividedBy(FACTOR_IGV);
+      const subtotal = precioUnitario.times(cantidad);
+      const igvItem = subtotal.minus(valorUnitario.times(cantidad));
+
       await tx.notaCreditoDetalles.create({
         data: {
           tenant_id: tenantId,
           nota_credito_id: notaCredito.id,
           producto_id: detalle.producto_id,
-          cantidad: detalle.cantidad,
-          valor_unitario: valorUnitario,
-          precio_unitario: detalle.precio_unitario,
-          igv_total: igvItem,
-          tasa_igv: 0.18,
+          cantidad: cantidad.toNumber(),
+          valor_unitario: valorUnitario.toDecimalPlaces(4).toNumber(),
+          precio_unitario: precioUnitario.toNumber(),
+          igv_total: igvItem.toDecimalPlaces(4).toNumber(),
+          tasa_igv: TASA_IGV_DECIMAL.toNumber(),
         },
       });
     }
@@ -344,7 +359,7 @@ export const createNotaCredito = async (
     if (data.devolver_efectivo && data.sesion_caja_id && ventaOriginal.condicion_pago === 'CONTADO' && tiposQueReducenDeuda.includes(data.tipo_nota)) {
       // 🔴 [VALIDACIÓN CRÍTICA] Verificar saldo de caja antes de crear egreso
       console.log('💰 [NC] Validando saldo de caja disponible...');
-      
+
       // Obtener sesión de caja
       const sesionCaja = await tx.sesionesCaja.findFirst({
         where: {
@@ -352,21 +367,21 @@ export const createNotaCredito = async (
           tenant_id: tenantId,
         },
       });
-      
+
       if (!sesionCaja) {
         throw Object.assign(
           new Error('Sesión de caja no encontrada'),
           { code: 'SESION_NO_ENCONTRADA' }
         );
       }
-      
+
       if (sesionCaja.estado !== 'ABIERTA') {
         throw Object.assign(
           new Error('La sesión de caja no está abierta. No se puede registrar el egreso.'),
           { code: 'SESION_NO_ABIERTA' }
         );
       }
-      
+
       // Calcular saldo actual de la sesión
       const movimientos = await tx.movimientosCaja.findMany({
         where: {
@@ -378,16 +393,16 @@ export const createNotaCredito = async (
           monto: true,
         },
       });
-      
+
       const saldoCaja = movimientos.reduce((sum, m) => {
         return sum + (m.tipo === 'INGRESO' ? Number(m.monto) : -Number(m.monto));
       }, Number(sesionCaja.monto_inicial));
-      
+
       const montoDevolucion = totalesNC.total;
-      
+
       console.log(`  Saldo actual de caja: S/ ${saldoCaja.toFixed(2)}`);
       console.log(`  Monto a devolver: S/ ${montoDevolucion.toFixed(2)}`);
-      
+
       // 🚫 BLOQUEO: Si no hay suficiente efectivo
       if (saldoCaja < montoDevolucion) {
         throw Object.assign(
@@ -401,7 +416,7 @@ export const createNotaCredito = async (
             `2. Deposita más efectivo en la caja antes de emitir esta NC\n` +
             `3. Reduce el monto de la Nota de Crédito`
           ),
-          { 
+          {
             code: 'SALDO_CAJA_INSUFICIENTE',
             data: {
               saldoDisponible: saldoCaja,
@@ -411,9 +426,9 @@ export const createNotaCredito = async (
           }
         );
       }
-      
+
       console.log('  ✅ Validación de saldo: APROBADA');
-      
+
       // Crear movimiento de egreso
       await tx.movimientosCaja.create({
         data: {
@@ -422,8 +437,8 @@ export const createNotaCredito = async (
           tipo: 'EGRESO',
           monto: totalesNC.total,
           descripcion: `Devolución automática por emisión de Nota de Crédito ${serieActiva.codigo}-${nuevoCorrelativo}`,
-          referencia_tipo: 'NOTA_CREDITO',
-          referencia_id: notaCredito.id.toString(),
+          nota_credito_id: notaCredito.id, // FK explícita
+          es_manual: false,
         },
       });
 
@@ -437,10 +452,10 @@ export const createNotaCredito = async (
 
       console.log(`  ✅ Efectivo devuelto: S/ ${totalesNC.total.toFixed(2)}`);
     }
-    
+
     // 7. [ENVÍO A SUNAT] - Llamar al facturador (Mock o Real)
     console.log('📡 [NC] Enviando a SUNAT...');
-    
+
     const datosParaSunat: DatosNotaCredito = {
       tipo_documento: tipoComprobanteOriginal as 'BOLETA' | 'FACTURA',
       serie: serieActiva.codigo,            // ✅ Usar código de la serie (ej: "FN01")
@@ -448,30 +463,37 @@ export const createNotaCredito = async (
       fecha_emision: new Date(),
       cliente_documento: null, // TODO: Obtener del cliente si existe
       cliente_nombre: 'CLIENTE', // TODO: Obtener del cliente
-      
+
       documento_referencia_tipo: tipoComprobanteOriginal as 'BOLETA' | 'FACTURA',
       documento_referencia_serie: ventaOriginal.serie?.codigo || '',
       documento_referencia_numero: ventaOriginal.numero_comprobante || 0,
       tipo_nota: data.tipo_nota,
       motivo: data.motivo_sustento,
-      
-      items: data.detalles.map(d => ({
-        descripcion: `Producto ID ${d.producto_id}`, // TODO: Obtener nombre real
-        cantidad: d.cantidad,
-        precio_unitario: d.precio_unitario,
-        valor_unitario: Number((d.precio_unitario / 1.18).toFixed(2)),
-        igv_item: Number((d.precio_unitario * d.cantidad * 0.18 / 1.18).toFixed(2)),
-      })),
-      
+
+      items: data.detalles.map(d => {
+        const precioUnitario = new Decimal(d.precio_unitario);
+        const cantidad = new Decimal(d.cantidad);
+        const valorUnitario = precioUnitario.dividedBy(FACTOR_IGV);
+        const igvItem = precioUnitario.times(cantidad).times(TASA_IGV_DECIMAL).dividedBy(FACTOR_IGV);
+
+        return {
+          descripcion: `Producto ID ${d.producto_id}`, // TODO: Obtener nombre real
+          cantidad: cantidad.toNumber(),
+          precio_unitario: precioUnitario.toNumber(),
+          valor_unitario: valorUnitario.toDecimalPlaces(4).toNumber(),
+          igv_item: igvItem.toDecimalPlaces(4).toNumber(),
+        };
+      }),
+
       total_gravado: totalesNC.totalGravado,
       total_igv: totalesNC.totalIGV,
       total: totalesNC.total,
     };
-    
+
     try {
       const facturador = obtenerFacturador();
       const respuestaSunat = await facturador.emitirNotaCredito(datosParaSunat);
-      
+
       if (respuestaSunat.exito) {
         // Actualizar con datos de SUNAT
         await tx.notasCredito.update({
@@ -483,7 +505,7 @@ export const createNotaCredito = async (
             hash_cpe: respuestaSunat.hash_cpe,
           },
         });
-        
+
         console.log('✅ [NC] ACEPTADA por SUNAT');
       } else {
         // Marcar como rechazada pero NO hacer rollback (ya se creó en BD)
@@ -493,7 +515,7 @@ export const createNotaCredito = async (
             estado_sunat: 'RECHAZADO',
           },
         });
-        
+
         console.error('❌ [NC] RECHAZADA por SUNAT:', respuestaSunat.mensaje);
       }
     } catch (error) {
@@ -506,7 +528,7 @@ export const createNotaCredito = async (
         },
       });
     }
-    
+
     return notaCredito;
   });
 };
@@ -530,24 +552,24 @@ export const listNotasCredito = async (
   const page = filters.page || 1;
   const limit = filters.limit || 10;
   const skip = (page - 1) * limit;
-  
+
   const where: Prisma.NotasCreditoWhereInput = {
     tenant_id: tenantId,
   };
-  
+
   // Filtros
   if (filters.venta_id) {
     where.venta_referencia_id = filters.venta_id;
   }
-  
+
   if (filters.estado_sunat) {
     where.estado_sunat = filters.estado_sunat as any;
   }
-  
+
   if (filters.tipo_nota) {
     where.tipo_nota = filters.tipo_nota as any;
   }
-  
+
   if (filters.fecha_inicio || filters.fecha_fin) {
     where.fecha_emision = {};
     if (filters.fecha_inicio) {
@@ -557,14 +579,14 @@ export const listNotasCredito = async (
       where.fecha_emision.lte = filters.fecha_fin;
     }
   }
-  
+
   if (filters.q) {
     where.OR = [
       { serie: { codigo: { contains: filters.q } } },  // ✅ Buscar en serie.codigo
       { numero: isNaN(Number(filters.q)) ? undefined : Number(filters.q) },
     ];
   }
-  
+
   const [data, total] = await Promise.all([
     db.notasCredito.findMany({
       where,
@@ -601,7 +623,7 @@ export const listNotasCredito = async (
     }),
     db.notasCredito.count({ where }),
   ]);
-  
+
   return {
     data,
     pagination: {
@@ -650,14 +672,14 @@ export const getNotaCreditoById = async (tenantId: number, id: number) => {
       },
     },
   });
-  
+
   if (!notaCredito) {
     throw Object.assign(
       new Error('Nota de Crédito no encontrada'),
       { code: 'NC_NOT_FOUND' }
     );
   }
-  
+
   return notaCredito;
 };
 
@@ -666,17 +688,17 @@ export const getNotaCreditoById = async (tenantId: number, id: number) => {
  */
 export const reenviarNotaCredito = async (tenantId: number, id: number) => {
   const notaCredito = await getNotaCreditoById(tenantId, id);
-  
+
   if (notaCredito.estado_sunat === 'ACEPTADO') {
     throw Object.assign(
       new Error('La Nota de Crédito ya fue aceptada por SUNAT'),
       { code: 'NC_YA_ACEPTADA' }
     );
   }
-  
+
   // TODO: Reconstruir datos y reenviar
   console.log('🔄 [NC] Reenviando a SUNAT...', id);
-  
+
   // Por ahora, solo actualizar estado a PENDIENTE para indicar reintento
   return db.notasCredito.update({
     where: { id },

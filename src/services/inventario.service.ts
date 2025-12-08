@@ -16,8 +16,11 @@ export interface RegistrarMovimientoParams {
     tipo: TipoMovimientoInventario;
     cantidad: number;
     costoUnitario?: number;
-    referenciaTipo: 'VENTA' | 'COMPRA' | 'AJUSTE' | 'NOTA_CREDITO' | 'DEVOLUCION';
-    referenciaId: number;
+    // FKs explícitas (usar solo una según el tipo de documento)
+    ventaId?: number;
+    ordenCompraId?: number;
+    notaCreditoId?: number;
+    ajusteManual?: boolean; // true para ajustes sin documento asociado
     motivo?: string;
     usuarioId?: number;
 }
@@ -57,8 +60,10 @@ export const registrarMovimiento = async (
         tipo,
         cantidad,
         costoUnitario,
-        referenciaTipo,
-        referenciaId,
+        ventaId,
+        ordenCompraId,
+        notaCreditoId,
+        ajusteManual,
         motivo,
         usuarioId,
     } = params;
@@ -125,8 +130,11 @@ export const registrarMovimiento = async (
             saldo_anterior: stockActual,
             saldo_nuevo: nuevoSaldo,
             costo_unitario: costoUnitario ?? null,
-            referencia_tipo: referenciaTipo,
-            referencia_id: referenciaId,
+            // FKs explícitas para integridad referencial
+            venta_id: ventaId ?? null,
+            orden_compra_id: ordenCompraId ?? null,
+            nota_credito_id: notaCreditoId ?? null,
+            ajuste_manual: ajusteManual ?? false,
             motivo: motivo ?? null,
             usuario_id: usuarioId ?? null,
         },
@@ -174,8 +182,7 @@ export const crearSalidaVenta = (
     productoId,
     tipo: 'SALIDA_VENTA',
     cantidad,
-    referenciaTipo: 'VENTA',
-    referenciaId: ventaId,
+    ventaId,
     usuarioId,
 });
 
@@ -195,8 +202,7 @@ export const crearEntradaCompra = (
     tipo: 'ENTRADA_COMPRA',
     cantidad,
     costoUnitario,
-    referenciaTipo: 'COMPRA',
-    referenciaId: ordenCompraId,
+    ordenCompraId,
     usuarioId,
 });
 
@@ -209,15 +215,13 @@ export const crearAjusteInventario = (
     esEntradaAjuste: boolean,
     cantidad: number,
     motivo: string,
-    ajusteId: number,
     usuarioId?: number
 ): RegistrarMovimientoParams => ({
     tenantId,
     productoId,
     tipo: esEntradaAjuste ? 'ENTRADA_AJUSTE' : 'SALIDA_AJUSTE',
     cantidad,
-    referenciaTipo: 'AJUSTE',
-    referenciaId: ajusteId,
+    ajusteManual: true,
     motivo,
     usuarioId,
 });
@@ -236,7 +240,6 @@ export const crearEntradaDevolucion = (
     productoId,
     tipo: 'ENTRADA_DEVOLUCION',
     cantidad,
-    referenciaTipo: 'NOTA_CREDITO',
-    referenciaId: notaCreditoId,
+    notaCreditoId,
     usuarioId,
 });

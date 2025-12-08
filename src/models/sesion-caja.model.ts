@@ -23,11 +23,11 @@ class SesionCajaModel {
     if (!data.caja_id || typeof data.caja_id !== 'number') {
       throw new Error('El ID de la caja es requerido y debe ser un número válido');
     }
-    
+
     if (data.monto_inicial === undefined || data.monto_inicial === null) {
       throw new Error('El monto inicial es requerido');
     }
-    
+
     if (data.monto_inicial < 0) {
       throw new Error('El monto inicial no puede ser negativo');
     }
@@ -127,11 +127,11 @@ class SesionCajaModel {
     if (!sesionId || typeof sesionId !== 'number') {
       throw new Error('El ID de la sesión es requerido y debe ser un número válido');
     }
-    
+
     if (data.monto_final === undefined || data.monto_final === null) {
       throw new Error('El monto final es requerido');
     }
-    
+
     if (data.monto_final < 0) {
       throw new Error('El monto final no puede ser negativo');
     }
@@ -249,11 +249,11 @@ class SesionCajaModel {
     if (!sesionId || typeof sesionId !== 'number') {
       throw new Error('El ID de la sesión es requerido y debe ser un número válido');
     }
-    
+
     if (data.monto_final === undefined || data.monto_final === null) {
       throw new Error('El monto final es requerido');
     }
-    
+
     if (data.monto_final < 0) {
       throw new Error('El monto final no puede ser negativo');
     }
@@ -607,8 +607,11 @@ class SesionCajaModel {
             tipo: true,
             monto: true,
             descripcion: true,
-            referencia_tipo: true,
-            referencia_id: true,
+            // FKs explícitas para determinar tipo de referencia
+            venta_id: true,
+            nota_credito_id: true,
+            pago_id: true,
+            es_manual: true,
             fecha: true,
           },
           orderBy: {
@@ -678,7 +681,7 @@ class SesionCajaModel {
 
     // Contar devoluciones (NC que generaron egreso automático)
     const devoluciones = sesion.movimientos.filter(
-      (m) => m.tipo === 'EGRESO' && m.referencia_tipo === 'NOTA_CREDITO'
+      (m) => m.tipo === 'EGRESO' && m.nota_credito_id !== null
     );
     const cantidadDevoluciones = devoluciones.length;
     const montoDevoluciones = devoluciones.reduce((sum, m) => sum + Number(m.monto), 0);
@@ -690,17 +693,36 @@ class SesionCajaModel {
       monto_devoluciones: montoDevoluciones,
     };
 
-    // Mapear movimientos con flag de automático
-    const movimientos = sesion.movimientos.map((m) => ({
-      id: m.id,
-      tipo: m.tipo,
-      descripcion: m.descripcion,
-      monto: Number(m.monto),
-      fecha_hora: m.fecha,
-      referencia_tipo: m.referencia_tipo,
-      referencia_id: m.referencia_id,
-      es_automatico: m.referencia_tipo !== 'MANUAL',
-    }));
+    // Mapear movimientos con flag de automático y derivar referencia_tipo para compatibilidad
+    const movimientos = sesion.movimientos.map((m) => {
+      // Derivar referencia_tipo para compatibilidad con API existente
+      let referenciaTipo: string | null = null;
+      let referenciaId: string | null = null;
+
+      if (m.venta_id) {
+        referenciaTipo = 'VENTA';
+        referenciaId = m.venta_id.toString();
+      } else if (m.nota_credito_id) {
+        referenciaTipo = 'NOTA_CREDITO';
+        referenciaId = m.nota_credito_id.toString();
+      } else if (m.pago_id) {
+        referenciaTipo = 'PAGO';
+        referenciaId = m.pago_id.toString();
+      } else if (m.es_manual) {
+        referenciaTipo = 'MANUAL';
+      }
+
+      return {
+        id: m.id,
+        tipo: m.tipo,
+        descripcion: m.descripcion,
+        monto: Number(m.monto),
+        fecha_hora: m.fecha,
+        referencia_tipo: referenciaTipo,
+        referencia_id: referenciaId,
+        es_automatico: !m.es_manual,
+      };
+    });
 
     return {
       sesion: this.mapSesionToDTO(sesion),

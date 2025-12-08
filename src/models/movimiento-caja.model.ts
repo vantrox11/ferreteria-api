@@ -31,7 +31,10 @@ class MovimientoCajaModel {
     }
 
     // ✅ VALIDACIÓN: Rechazar descripciones vagas para movimientos manuales
-    if (data.referencia_tipo === 'MANUAL' || !data.referencia_tipo) {
+    // Si no hay FK explícita a venta, nota_credito o pago, es un movimiento manual
+    const esMovimientoManual = !data.venta_id && !data.nota_credito_id && !data.pago_id;
+
+    if (esMovimientoManual) {
       const descripcionLower = data.descripcion.toLowerCase();
       const descripcionesProhibidas = [
         'egreso',
@@ -42,12 +45,12 @@ class MovimientoCajaModel {
         'pago',
         'cobro',
       ];
-      
+
       // Si la descripción SOLO contiene palabras prohibidas sin contexto
       const soloDescripcionVaga = descripcionesProhibidas.some(
         (prohibida) => descripcionLower.trim() === prohibida
       );
-      
+
       if (soloDescripcionVaga) {
         throw Object.assign(
           new Error(
@@ -64,8 +67,11 @@ class MovimientoCajaModel {
         tipo: data.tipo,
         monto: new Decimal(data.monto),
         descripcion: data.descripcion,
-        referencia_tipo: data.referencia_tipo,
-        referencia_id: data.referencia_id,
+        // FKs explícitas para integridad referencial
+        venta_id: data.venta_id ?? null,
+        nota_credito_id: data.nota_credito_id ?? null,
+        pago_id: data.pago_id ?? null,
+        es_manual: esMovimientoManual,
         sesion_caja_id: sesionActiva.id,
         tenant_id: tenantId,
       },
@@ -144,13 +150,25 @@ class MovimientoCajaModel {
    * Mapear movimiento de Prisma a DTO
    */
   private mapMovimientoToDTO(movimiento: any): MovimientoCajaResponseDTO {
+    // Derivar referencia_tipo para compatibilidad con API existente
+    let referenciaTipo: string | undefined;
+    if (movimiento.venta_id) referenciaTipo = 'VENTA';
+    else if (movimiento.nota_credito_id) referenciaTipo = 'NOTA_CREDITO';
+    else if (movimiento.pago_id) referenciaTipo = 'PAGO';
+    else if (movimiento.es_manual) referenciaTipo = 'MANUAL';
+
+    const referenciaId = movimiento.venta_id?.toString()
+      || movimiento.nota_credito_id?.toString()
+      || movimiento.pago_id?.toString()
+      || undefined;
+
     return {
       id: movimiento.id,
       tipo: movimiento.tipo,
       monto: Number(movimiento.monto),
       descripcion: movimiento.descripcion,
-      referencia_tipo: movimiento.referencia_tipo || undefined,
-      referencia_id: movimiento.referencia_id || undefined,
+      referencia_tipo: referenciaTipo,
+      referencia_id: referenciaId,
       fecha: movimiento.fecha,
       sesion_caja_id: movimiento.sesion_caja_id,
       sesion_caja: movimiento.sesion_caja,

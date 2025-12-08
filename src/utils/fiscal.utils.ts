@@ -1,6 +1,13 @@
 /**
  * Utilidades para cálculos fiscales (IGV)
+ * 
+ * ACTUALIZADO: Usa Decimal.js para precisión exacta en cálculos monetarios
  */
+
+import Decimal from 'decimal.js';
+
+// Configurar Decimal.js para alta precisión
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 export interface FiscalConfig {
   tasa_impuesto: number;
@@ -39,6 +46,7 @@ export const calcularTasaIGV = (
 
 /**
  * Descompone un precio final (con IGV) en sus componentes fiscales
+ * Usa Decimal.js para precisión exacta
  * 
  * @param precioFinal - Precio con IGV incluido
  * @param tasaIGV - Tasa de IGV en porcentaje (ej: 18.00)
@@ -60,19 +68,23 @@ export const descomponerPrecioConIGV = (
     };
   }
 
-  const divisor = 1 + (tasaIGV / 100);
-  const valor_base = precioFinal / divisor;
-  const igv = precioFinal - valor_base;
+  const precio = new Decimal(precioFinal);
+  const tasa = new Decimal(tasaIGV);
+  const divisor = new Decimal(1).plus(tasa.dividedBy(100));
+
+  const valor_base = precio.dividedBy(divisor);
+  const igv = precio.minus(valor_base);
 
   return {
-    valor_base: Number(valor_base.toFixed(2)),
-    igv: Number(igv.toFixed(2)),
-    precio_final: precioFinal,
+    valor_base: valor_base.toDecimalPlaces(4).toNumber(),
+    igv: igv.toDecimalPlaces(4).toNumber(),
+    precio_final: precio.toDecimalPlaces(2).toNumber(),
   };
 };
 
 /**
  * Calcula el precio final a partir de un valor base (sin IGV)
+ * Usa Decimal.js para precisión exacta
  * 
  * @param valorBase - Precio sin IGV
  * @param tasaIGV - Tasa de IGV en porcentaje (ej: 18.00)
@@ -86,6 +98,9 @@ export const calcularPrecioConIGV = (
     return valorBase;
   }
 
-  const multiplicador = 1 + (tasaIGV / 100);
-  return Number((valorBase * multiplicador).toFixed(2));
+  const base = new Decimal(valorBase);
+  const tasa = new Decimal(tasaIGV);
+  const multiplicador = new Decimal(1).plus(tasa.dividedBy(100));
+
+  return base.times(multiplicador).toDecimalPlaces(2).toNumber();
 };

@@ -3,7 +3,14 @@
  * 
  * Realiza cálculos de desglose de IGV para compras
  * según la normativa peruana (18% de IGV)
+ * 
+ * ACTUALIZADO: Usa Decimal.js para precisión exacta en cálculos monetarios
  */
+
+import Decimal from 'decimal.js';
+
+// Configurar Decimal.js para alta precisión
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 export interface DesgloseIGV {
   costo_base: number;      // Costo sin IGV
@@ -24,8 +31,8 @@ export interface DetalleCompra {
 
 export class IGVCalculator {
   // Tasa de IGV en Perú (18%)
-  static readonly TASA_IGV = 18.00;
-  static readonly FACTOR_IGV = 1.18;
+  static readonly TASA_IGV = new Decimal(18);
+  static readonly FACTOR_IGV = new Decimal('1.18');
 
   /**
    * Calcula el desglose de un costo que incluye IGV
@@ -38,16 +45,18 @@ export class IGVCalculator {
    * // Returns: { costo_base: 100, igv: 18, total: 118 }
    */
   static calcularDesgloseCompra(costoConIGV: number): DesgloseIGV {
+    const total = new Decimal(costoConIGV);
+
     // Fórmula: Base = Total / 1.18
-    const base = costoConIGV / this.FACTOR_IGV;
-    
+    const base = total.dividedBy(this.FACTOR_IGV);
+
     // Fórmula: IGV = Base * 0.18
-    const igv = base * (this.TASA_IGV / 100);
-    
+    const igv = base.times(this.TASA_IGV).dividedBy(100);
+
     return {
-      costo_base: Number(base.toFixed(4)),  // 4 decimales para precisión
-      igv: Number(igv.toFixed(2)),          // 2 decimales para moneda
-      total: Number(costoConIGV.toFixed(2)) // 2 decimales para moneda
+      costo_base: base.toDecimalPlaces(4).toNumber(),   // 4 decimales para precisión
+      igv: igv.toDecimalPlaces(2).toNumber(),           // 2 decimales para moneda
+      total: total.toDecimalPlaces(2).toNumber()        // 2 decimales para moneda
     };
   }
 
@@ -65,36 +74,39 @@ export class IGVCalculator {
    * // Returns: { subtotal_base: 1250, impuesto_igv: 225, total: 1475 }
    */
   static calcularTotalesOrden(detalles: DetalleCompra[]): TotalesOrden {
-    let subtotal_base = 0;
-    let impuesto_igv = 0;
-    let total = 0;
+    let subtotal_base = new Decimal(0);
+    let impuesto_igv = new Decimal(0);
+    let total = new Decimal(0);
 
     detalles.forEach(detalle => {
+      const cantidad = new Decimal(detalle.cantidad);
+      const costoUnitario = new Decimal(detalle.costo_unitario);
+
       const desglose = this.calcularDesgloseCompra(detalle.costo_unitario);
-      
+
       // Acumular base e IGV multiplicados por cantidad
-      subtotal_base += desglose.costo_base * detalle.cantidad;
-      impuesto_igv += desglose.igv * detalle.cantidad;
-      
-      // Total = suma EXACTA de los precios ingresados (evita error de redondeo)
-      total += detalle.costo_unitario * detalle.cantidad;
+      subtotal_base = subtotal_base.plus(new Decimal(desglose.costo_base).times(cantidad));
+      impuesto_igv = impuesto_igv.plus(new Decimal(desglose.igv).times(cantidad));
+
+      // Total = suma EXACTA de los precios ingresados
+      total = total.plus(costoUnitario.times(cantidad));
     });
 
-    // Redondear valores
-    subtotal_base = Number(subtotal_base.toFixed(2));
-    impuesto_igv = Number(impuesto_igv.toFixed(2));
-    total = Number(total.toFixed(2));
+    // Redondear valores finales
+    const subtotalRedondeado = subtotal_base.toDecimalPlaces(2);
+    let igvRedondeado = impuesto_igv.toDecimalPlaces(2);
+    const totalRedondeado = total.toDecimalPlaces(2);
 
-    // Ajuste de redondeo: Si hay diferencia, ajustar IGV (Opción A)
-    const diferencia = total - (subtotal_base + impuesto_igv);
-    if (Math.abs(diferencia) > 0 && Math.abs(diferencia) <= 0.05) {
-      impuesto_igv = Number((impuesto_igv + diferencia).toFixed(2));
+    // Ajuste de redondeo: Si hay diferencia, ajustar IGV
+    const diferencia = totalRedondeado.minus(subtotalRedondeado.plus(igvRedondeado));
+    if (diferencia.abs().greaterThan(0) && diferencia.abs().lessThanOrEqualTo(0.05)) {
+      igvRedondeado = igvRedondeado.plus(diferencia);
     }
 
     return {
-      subtotal_base,
-      impuesto_igv,
-      total
+      subtotal_base: subtotalRedondeado.toNumber(),
+      impuesto_igv: igvRedondeado.toNumber(),
+      total: totalRedondeado.toNumber()
     };
   }
 
@@ -110,7 +122,7 @@ export class IGVCalculator {
    * // Returns: 118
    */
   static calcularConIGV(costoBase: number): number {
-    return Number((costoBase * this.FACTOR_IGV).toFixed(2));
+    return new Decimal(costoBase).times(this.FACTOR_IGV).toDecimalPlaces(2).toNumber();
   }
 
   /**
@@ -122,14 +134,18 @@ export class IGVCalculator {
    * @returns true si el desglose es correcto
    */
   static validarDesglose(costoBase: number, igv: number, total: number): boolean {
-    const margenError = 0.02; // 2 centavos de margen por redondeo
-    
-    const igvCalculado = costoBase * (this.TASA_IGV / 100);
-    const totalCalculado = costoBase + igv;
-    
-    const errorIGV = Math.abs(igv - igvCalculado);
-    const errorTotal = Math.abs(total - totalCalculado);
-    
-    return errorIGV <= margenError && errorTotal <= margenError;
+    const margenError = new Decimal('0.02'); // 2 centavos de margen por redondeo
+
+    const base = new Decimal(costoBase);
+    const igvInput = new Decimal(igv);
+    const totalInput = new Decimal(total);
+
+    const igvCalculado = base.times(this.TASA_IGV).dividedBy(100);
+    const totalCalculado = base.plus(igvInput);
+
+    const errorIGV = igvInput.minus(igvCalculado).abs();
+    const errorTotal = totalInput.minus(totalCalculado).abs();
+
+    return errorIGV.lessThanOrEqualTo(margenError) && errorTotal.lessThanOrEqualTo(margenError);
   }
 }
