@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    /* Opciones Base */
+    "target": "ES2020",
+    "module": "CommonJS",
+    "strict": true,
+
+    /* Opciones de Módulos */
+    "moduleResolution": "node",
+    "esModuleInterop": true, // ¡Esta es la clave! Permite 'import' de módulos CommonJS
+
+    /* Opciones de Salida */
+    "outDir": "./dist",
+    "rootDir": "./src",
+
+    /* Otras Opciones */
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*" // Solo compila lo que está en 'src'
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

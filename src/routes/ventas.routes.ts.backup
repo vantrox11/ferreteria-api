@@ -1,0 +1,538 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { checkTenant } from '../middlewares/tenant.middleware';
+import { checkAuth, requireRoles } from '../middlewares/auth.middleware';
+import { requireSesionCajaActiva } from '../middlewares/sesion-caja.middleware';
+import { validateRequest } from '../middlewares/validate.middleware';
+import {
+  getVentasHandler,
+  getVentaByIdHandler,
+  createVentaHandler,
+  updateVentaHandler,
+  deleteVentaHandler,
+} from '../controllers/ventas.controller';
+import { registry, commonResponses } from '../config/openapi-registry';
+import {
+  VentaResponseSchema,
+  CreateVentaSchema,
+  UpdateVentaSchema,
+  ListVentasQuerySchema,
+  PaginatedVentaResponseSchema,
+} from '../dtos/venta.dto';
+import { IdParamSchema } from '../dtos/common.dto';
+
+const router = Router();
+
+router.use(checkTenant);
+router.use(checkAuth);
+
+// ============================================================================
+// REGISTRO DE ENDPOINTS EN OPENAPI
+// ============================================================================
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/ventas',
+  tags: ['Ventas (POS)'],
+  summary: 'Listar ventas con filtros y paginación',
+  description: 'Obtiene ventas del tenant con paginación, búsqueda y filtros por cliente y fecha.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    query: ListVentasQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Lista paginada de ventas',
+      content: {
+        'application/json': {
+          schema: PaginatedVentaResponseSchema,
+        },
+      },
+    },
+    ...commonResponses,
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/ventas/{id}',
+  tags: ['Ventas (POS)'],
+  summary: 'Obtener detalle de venta',
+  description: 'Retorna la venta con todos sus detalles, cliente y snapshot fiscal inmutable.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Detalle de venta con snapshot fiscal',
+      content: {
+        'application/json': {
+          schema: VentaResponseSchema,
+        },
+      },
+    },
+    ...commonResponses,
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/ventas',
+  tags: ['Ventas (POS)'],
+  summary: 'Registrar venta (Requiere sesión de caja activa)',
+  description: `Crea una venta completa con validación de stock y descuento automático.
+  
+**Proceso automático:**
+1. Valida sesión de caja ABIERTA del usuario
+2. Determina tipo de comprobante (RUC 11 → FACTURA, otros → BOLETA)
+3. Asigna serie activa y correlativo
+4. Calcula IGV según jerarquía (tenant → producto)
+5. Genera snapshot fiscal inmutable
+6. Valida stock disponible
+7. Descuenta stock de forma atómica
+
+**Snapshot Fiscal:**
+- valor_unitario: Precio sin IGV
+- precio_unitario: Precio con IGV (lo que ingresa el usuario)
+- igv_total: Monto del impuesto
+- tasa_igv: Tasa aplicada (histórica)`,
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateVentaSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Venta creada exitosamente',
+      content: {
+        'application/json': {
+          schema: VentaResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: 'No tiene sesión de caja activa',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+            requiere_accion: z.string(),
+          }),
+        },
+      },
+    },
+    409: {
+      description: 'Stock insuficiente',
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string(),
+          }),
+        },
+      },
+    },
+    ...commonResponses,
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/ventas/{id}',
+  tags: ['Ventas (POS)'],
+  summary: 'Actualizar venta (Solo Admin - Uso limitado)',
+  description: 'Permite actualizar metadatos de la venta. El snapshot fiscal NO puede modificarse.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateVentaSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Venta actualizada exitosamente',
+      content: {
+        'application/json': {
+          schema: VentaResponseSchema,
+        },
+      },
+    },
+    ...commonResponses,
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/ventas/{id}',
+  tags: ['Ventas (POS)'],
+  summary: 'Eliminar venta (Solo Admin - Uso muy limitado)',
+  description: '⚠️ ADVERTENCIA: Considerar implementar anulación en lugar de eliminación. En producción, las ventas no deben eliminarse por temas legales (SUNAT).',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Venta eliminada exitosamente',
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string(),
+          }),
+        },
+      },
+    },
+    ...commonResponses,
+  },
+});
+
+// ============================================================================
+// RUTAS CON VALIDACIÓN AUTOMÁTICA
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/ventas:
+ *   get:
+ *     tags: [Ventas (POS)]
+ *     summary: Listar ventas con filtros
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Búsqueda por cliente o método de pago
+ *       - in: query
+ *         name: cliente_id
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: fecha_inicio
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: fecha_fin
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Lista de ventas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       total:
+ *                         type: number
+ *                       metodo_pago:
+ *                         type: string
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *                       cliente:
+ *                         type: object
+ *                       usuario:
+ *                         type: object
+ *                 meta:
+ *                   $ref: '#/components/schemas/PaginationMeta'
+ */
+router.get('/', getVentasHandler);
+
+/**
+ * @swagger
+ * /api/ventas/{id}:
+ *   get:
+ *     tags: [Ventas (POS)]
+ *     summary: Obtener detalle de venta
+ *     description: Retorna la venta con todos sus detalles, cliente y comprobante.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Detalle de venta con snapshot fiscal
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 total:
+ *                   type: number
+ *                 metodo_pago:
+ *                   type: string
+ *                 created_at:
+ *                   type: string
+ *                 detalles:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       producto_id:
+ *                         type: integer
+ *                       producto_nombre:
+ *                         type: string
+ *                       cantidad:
+ *                         type: number
+ *                       valor_unitario:
+ *                         type: number
+ *                         description: Precio SIN IGV
+ *                       precio_unitario:
+ *                         type: number
+ *                         description: Precio CON IGV
+ *                       igv_total:
+ *                         type: number
+ *                       tasa_igv:
+ *                         type: number
+ */
+router.get('/:id', getVentaByIdHandler);
+
+/**
+ * @swagger
+ * /api/ventas:
+ *   post:
+ *     tags: [Ventas (POS)]
+ *     summary: Registrar venta (Requiere sesión de caja activa)
+ *     description: |
+ *       Crea una venta completa con validación de stock y descuento automático.
+ *       
+ *       **Proceso automático:**
+ *       1. Valida sesión de caja ABIERTA del usuario
+ *       2. Determina tipo de comprobante (RUC 11 → FACTURA, otros → BOLETA)
+ *       3. Asigna serie activa y correlativo
+ *       4. Calcula IGV según jerarquía (tenant → producto)
+ *       5. Genera snapshot fiscal inmutable
+ *       6. Valida stock disponible
+ *       7. Descuenta stock de forma atómica
+ *       
+ *       **Snapshot Fiscal:**
+ *       - valor_unitario: Precio sin IGV
+ *       - precio_unitario: Precio con IGV (lo que ingresa el usuario)
+ *       - igv_total: Monto del impuesto
+ *       - tasa_igv: Tasa aplicada (histórica)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - detalles
+ *             properties:
+ *               cliente_id:
+ *                 type: integer
+ *                 nullable: true
+ *                 example: 5
+ *               metodo_pago:
+ *                 type: string
+ *                 example: Efectivo
+ *               detalles:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - producto_id
+ *                     - cantidad
+ *                     - precio_unitario
+ *                   properties:
+ *                     producto_id:
+ *                       type: integer
+ *                       example: 10
+ *                     cantidad:
+ *                       type: number
+ *                       format: decimal
+ *                       example: 2.5
+ *                       description: Soporta decimales
+ *                     precio_unitario:
+ *                       type: number
+ *                       format: decimal
+ *                       example: 50.00
+ *                       description: Precio CON IGV (el sistema descompone)
+ *     responses:
+ *       201:
+ *         description: Venta creada exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 total:
+ *                   type: number
+ *                 numero_comprobante:
+ *                   type: integer
+ *                   example: 45
+ *                 serie_id:
+ *                   type: integer
+ *                 created_at:
+ *                   type: string
+ *       403:
+ *         description: No tiene sesión de caja activa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                 requiere_accion:
+ *                   type: string
+ *                   example: APERTURA_SESION
+ *       404:
+ *         description: Producto no encontrado o serie no configurada
+ *       409:
+ *         description: Stock insuficiente
+ */
+router.post('/', requireRoles(['admin', 'empleado']), requireSesionCajaActiva, createVentaHandler);
+
+/**
+ * @swagger
+ * /api/ventas/{id}:
+ *   put:
+ *     tags: [Ventas (POS)]
+ *     summary: Actualizar venta (Solo Admin - Uso limitado)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               metodo_pago:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Venta actualizada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 total:
+ *                   type: number
+ *                 metodo_pago:
+ *                   type: string
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
+ */
+router.put('/:id', requireRoles(['admin']), updateVentaHandler);
+
+/**
+ * @swagger
+ * /api/ventas/{id}:
+ *   delete:
+ *     tags: [Ventas (POS)]
+ *     summary: Eliminar venta (Solo Admin - Uso muy limitado)
+ *     description: |
+ *       ⚠️ ADVERTENCIA: Considerar implementar anulación en lugar de eliminación.
+ *       En producción, las ventas no deben eliminarse por temas legales (SUNAT).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Venta eliminada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Venta eliminada exitosamente.
+ */
+
+router.get(
+  '/',
+  validateRequest(z.object({ query: ListVentasQuerySchema })),
+  getVentasHandler
+);
+
+router.get(
+  '/:id',
+  validateRequest(z.object({ params: IdParamSchema })),
+  getVentaByIdHandler
+);
+
+router.post(
+  '/',
+  requireRoles(['admin', 'empleado']),
+  requireSesionCajaActiva,
+  validateRequest(z.object({ body: CreateVentaSchema })),
+  createVentaHandler
+);
+
+router.put(
+  '/:id',
+  requireRoles(['admin']),
+  validateRequest(z.object({
+    params: IdParamSchema,
+    body: UpdateVentaSchema,
+  })),
+  updateVentaHandler
+);
+
+router.delete(
+  '/:id',
+  requireRoles(['admin']),
+  validateRequest(z.object({ params: IdParamSchema })),
+  deleteVentaHandler
+);
+
+export default router;

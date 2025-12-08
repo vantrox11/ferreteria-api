@@ -1,0 +1,726 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model UnidadesMedida {
+  id                Int         @id @default(autoincrement())
+  codigo            String
+  nombre            String
+  permite_decimales Boolean     @default(false)
+  tenant_id         Int
+  productos         Productos[]
+  tenant            Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, codigo])
+  @@index([tenant_id])
+}
+
+model Marcas {
+  id        Int         @id @default(autoincrement())
+  nombre    String
+  logo_url  String?
+  isActive  Boolean     @default(true)
+  tenant_id Int
+  tenant    Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  productos Productos[]
+
+  @@unique([tenant_id, nombre])
+  @@index([tenant_id])
+}
+
+model Tenants {
+  id                  Int                   @id @default(autoincrement())
+  nombre_empresa      String
+  subdominio          String                @unique
+  isActive            Boolean               @default(false)
+  configuracion       String?               @db.LongText
+  created_at          DateTime              @default(now()) @map("created_at")
+  AuditoriaLogs       AuditoriaLogs[]
+  Cajas               Cajas[]
+  Categorias          Categorias[]
+  Clientes            Clientes[]
+  CuentasPorCobrar    CuentasPorCobrar[]
+  InventarioAjustes   InventarioAjustes[]
+  Marcas              Marcas[]
+  MovimientosCaja     MovimientosCaja[]
+  OrdenCompraDetalles OrdenCompraDetalles[]
+  OrdenesCompra       OrdenesCompra[]
+  Pagos               Pagos[]
+  PedidoDetalles      PedidoDetalles[]
+  Pedidos             Pedidos[]
+  Productos           Productos[]
+  Proveedores         Proveedores[]
+  Series              Series[]
+  SesionesCaja        SesionesCaja[]
+  UnidadesMedida      UnidadesMedida[]
+  Usuarios            Usuarios[]
+  VentaDetalles       VentaDetalles[]
+  Ventas              Ventas[]
+}
+
+model Usuarios {
+  id                  Int                 @id @default(autoincrement())
+  email               String
+  password_hash       String
+  nombre              String?
+  rol                 RolUsuario          @default(empleado)
+  tenant_id           Int
+  isActive            Boolean             @default(true)
+  auditoria_logs      AuditoriaLogs[]
+  GuiasRemision       GuiasRemision[]
+  ajustes_inventario  InventarioAjustes[]
+  NotasCredito        NotasCredito[]
+  ordenes_compra      OrdenesCompra[]
+  Pagos               Pagos[]
+  pedidos_gestionados Pedidos[]           @relation("UsuarioGestionPedido")
+  sesiones_caja       SesionesCaja[]
+  tenant              Tenants             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  ventas              Ventas[]
+
+  @@unique([tenant_id, email])
+  @@index([tenant_id])
+}
+
+model Categorias {
+  id          Int         @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  tenant_id   Int
+  isActive    Boolean     @default(true)
+  tenant      Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  productos   Productos[]
+
+  @@unique([tenant_id, nombre])
+  @@index([tenant_id])
+}
+
+model Productos {
+  id                   Int                    @id @default(autoincrement())
+  nombre               String
+  sku                  String?
+  descripcion          String?
+  costo_compra         Decimal?
+  stock                Decimal                @default(0.000) @db.Decimal(12, 3)
+  stock_minimo         Int                    @default(5)
+  tenant_id            Int
+  categoria_id         Int?
+  isActive             Boolean                @default(true)
+  marca_id             Int?
+  unidad_medida_id     Int
+  afectacion_igv       AfectacionIGV          @default(GRAVADO)
+  precio_base          Decimal                @db.Decimal(12, 2)
+  imagen_url           String?
+  guia_remision_detalles GuiaRemisionDetalles[]
+  inventario_ajustes   InventarioAjustes[]
+  nota_credito_detalles NotaCreditoDetalles[]
+  orden_compra_detalles OrdenCompraDetalles[]
+  pedido_detalles      PedidoDetalles[]
+  categoria            Categorias?            @relation(fields: [categoria_id], references: [id])
+  marca                Marcas?                @relation(fields: [marca_id], references: [id])
+  tenant               Tenants                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  unidad_medida        UnidadesMedida         @relation(fields: [unidad_medida_id], references: [id])
+  VentaDetalles        VentaDetalles[]
+
+  @@unique([tenant_id, sku])
+  @@index([tenant_id])
+  @@index([categoria_id])
+  @@index([marca_id])
+  @@index([unidad_medida_id])
+}
+
+model InventarioAjustes {
+  id          Int        @id @default(autoincrement())
+  tipo        TipoAjuste
+  cantidad    Decimal    @db.Decimal(12, 3)
+  motivo      String
+  created_at  DateTime   @default(now()) @map("created_at")
+  tenant_id   Int
+  producto_id Int
+  usuario_id  Int?
+  producto    Productos  @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+  tenant      Tenants    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario     Usuarios?  @relation(fields: [usuario_id], references: [id])
+
+  @@index([tenant_id])
+  @@index([producto_id])
+  @@index([usuario_id])
+}
+
+model Proveedores {
+  id             Int             @id @default(autoincrement())
+  nombre         String
+  ruc_identidad  String
+  email          String?
+  telefono       String?
+  direccion      String?
+  tenant_id      Int
+  isActive       Boolean         @default(true)
+  tipo_documento TipoDocumento   @default(RUC)
+  ordenes_compra OrdenesCompra[]
+  tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, ruc_identidad])
+  @@index([tenant_id])
+  @@index([tipo_documento])
+}
+
+model OrdenesCompra {
+  id                  Int                   @id @default(autoincrement())
+  total               Decimal?
+  estado              EstadoOrdenCompra     @default(pendiente)
+  fecha_creacion      DateTime              @default(now()) @map("fecha_creacion")
+  fecha_recepcion     DateTime?             @map("fecha_recepcion")
+  tenant_id           Int
+  proveedor_id        Int?
+  usuario_id          Int?
+  fecha_contable      DateTime?             @default(now())
+  fecha_emision       DateTime?
+  impuesto_igv        Decimal?              @db.Decimal(12, 2)
+  numero              String?
+  proveedor_ruc       String?
+  serie               String?
+  subtotal_base       Decimal?              @db.Decimal(12, 2)
+  tipo_comprobante    String?
+  OrdenCompraDetalles OrdenCompraDetalles[]
+  proveedor           Proveedores?          @relation(fields: [proveedor_id], references: [id])
+  tenant              Tenants               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario             Usuarios?             @relation(fields: [usuario_id], references: [id])
+
+  @@unique([serie, numero, proveedor_ruc, tenant_id], name: "unique_comprobante_compra")
+  @@index([tenant_id])
+  @@index([proveedor_id])
+  @@index([usuario_id])
+  @@index([tipo_comprobante])
+  @@index([fecha_emision])
+}
+
+model OrdenCompraDetalles {
+  id                   Int           @id @default(autoincrement())
+  cantidad             Decimal       @db.Decimal(12, 3)
+  costo_unitario       Decimal
+  tenant_id            Int
+  orden_compra_id      Int
+  producto_id          Int
+  costo_unitario_base  Decimal?      @db.Decimal(12, 4)
+  costo_unitario_total Decimal?      @db.Decimal(12, 4)
+  igv_linea            Decimal?      @db.Decimal(12, 2)
+  tasa_igv             Decimal?      @default(18.00) @db.Decimal(5, 2)
+  orden_compra         OrdenesCompra @relation(fields: [orden_compra_id], references: [id], onDelete: Cascade)
+  producto             Productos     @relation(fields: [producto_id], references: [id])
+  tenant               Tenants       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([orden_compra_id])
+  @@index([producto_id])
+}
+
+model Clientes {
+  id                  Int                @id @default(autoincrement())
+  nombre              String
+  documento_identidad String?
+  email               String?
+  telefono            String?
+  direccion           String?
+  tenant_id           Int
+  isActive            Boolean            @default(true)
+  razon_social        String?
+  ruc                 String?
+  dias_credito        Int                @default(0)
+  limite_credito      Decimal            @default(0.00) @db.Decimal(12, 2)
+  tenant              Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  cuentas_por_cobrar  CuentasPorCobrar[]
+  pedidos             Pedidos[]
+  ventas              Ventas[]
+
+  @@unique([tenant_id, documento_identidad])
+  @@index([tenant_id])
+  @@index([ruc])
+}
+
+model Ventas {
+  id                 Int                   @id @default(autoincrement())
+  total              Decimal               @db.Decimal(12, 2)
+  metodo_pago        String?
+  created_at         DateTime              @default(now()) @map("created_at")
+  tenant_id          Int
+  cliente_id         Int?
+  usuario_id         Int?
+  pedido_origen_id   Int?                  @unique
+  numero_comprobante Int?
+  serie_id           Int?
+  sesion_caja_id     Int?
+  condicion_pago     Ventas_condicion_pago @default(CONTADO)
+  estado_pago        Ventas_estado_pago    @default(PAGADO)
+  fecha_vencimiento  DateTime?
+  monto_pagado       Decimal               @default(0.00) @db.Decimal(12, 2)
+  saldo_pendiente    Decimal               @default(0.00) @db.Decimal(12, 2)
+  cdr_url            String?
+  codigo_qr          String?               @db.Text
+  estado_sunat       Ventas_estado_sunat?  @default(PENDIENTE)
+  hash_cpe           String?
+  referencia_pago    String?
+  xml_url            String?
+  CuentasPorCobrar   CuentasPorCobrar?
+  guias_remision     GuiasRemision[]
+  notas_credito      NotasCredito[]
+  VentaDetalles      VentaDetalles[]
+  cliente            Clientes?             @relation(fields: [cliente_id], references: [id])
+  pedido_origen      Pedidos?              @relation("VentaGenerada", fields: [pedido_origen_id], references: [id])
+  serie              Series?               @relation(fields: [serie_id], references: [id])
+  sesion_caja        SesionesCaja?         @relation(fields: [sesion_caja_id], references: [id])
+  tenant             Tenants               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario            Usuarios?             @relation(fields: [usuario_id], references: [id])
+
+  @@unique([serie_id, numero_comprobante, tenant_id])
+  @@index([tenant_id])
+  @@index([cliente_id])
+  @@index([usuario_id])
+  @@index([pedido_origen_id])
+  @@index([sesion_caja_id])
+  @@index([serie_id])
+}
+
+model VentaDetalles {
+  id              Int       @id @default(autoincrement())
+  cantidad        Decimal   @db.Decimal(12, 3)
+  precio_unitario Decimal   @db.Decimal(12, 2)
+  tenant_id       Int
+  venta_id        Int
+  producto_id     Int
+  igv_total       Decimal   @db.Decimal(12, 2)
+  tasa_igv        Decimal   @db.Decimal(5, 2)
+  valor_unitario  Decimal   @db.Decimal(12, 2)
+  producto        Productos @relation(fields: [producto_id], references: [id])
+  tenant          Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  venta           Ventas    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([venta_id])
+  @@index([producto_id])
+}
+
+model Pedidos {
+  id                 Int              @id @default(autoincrement())
+  created_at         DateTime         @default(now()) @map("created_at")
+  estado             EstadoPedido     @default(pendiente)
+  tipo_recojo        TipoRecojo
+  tenant_id          Int
+  cliente_id         Int?
+  usuario_gestion_id Int?
+  detalles           PedidoDetalles[]
+  cliente            Clientes?        @relation(fields: [cliente_id], references: [id])
+  tenant             Tenants          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario_gestion    Usuarios?        @relation("UsuarioGestionPedido", fields: [usuario_gestion_id], references: [id])
+  venta_generada     Ventas?          @relation("VentaGenerada")
+
+  @@index([tenant_id])
+  @@index([cliente_id])
+  @@index([usuario_gestion_id])
+}
+
+model PedidoDetalles {
+  id          Int       @id @default(autoincrement())
+  cantidad    Decimal   @db.Decimal(12, 3)
+  tenant_id   Int
+  pedido_id   Int
+  producto_id Int
+  pedido      Pedidos   @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  producto    Productos @relation(fields: [producto_id], references: [id])
+  tenant      Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([pedido_id])
+  @@index([producto_id])
+}
+
+model Cajas {
+  id        Int            @id @default(autoincrement())
+  nombre    String
+  isActive  Boolean        @default(true)
+  tenant_id Int
+  tenant    Tenants        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  series    Series[]
+  sesiones  SesionesCaja[]
+
+  @@unique([tenant_id, nombre])
+  @@index([tenant_id])
+}
+
+model SesionesCaja {
+  id             Int               @id @default(autoincrement())
+  fecha_apertura DateTime          @default(now())
+  fecha_cierre   DateTime?
+  monto_inicial  Decimal           @db.Decimal(12, 2)
+  monto_final    Decimal?          @db.Decimal(12, 2)
+  total_ventas   Decimal?          @db.Decimal(12, 2)
+  total_ingresos Decimal?          @db.Decimal(12, 2)
+  total_egresos  Decimal?          @db.Decimal(12, 2)
+  diferencia     Decimal?          @db.Decimal(12, 2)
+  estado         EstadoSesionCaja  @default(ABIERTA)
+  tenant_id      Int
+  caja_id        Int
+  usuario_id     Int
+  movimientos    MovimientosCaja[]
+  caja           Cajas             @relation(fields: [caja_id], references: [id], onDelete: Cascade)
+  tenant         Tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario        Usuarios          @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  ventas         Ventas[]
+
+  @@index([tenant_id])
+  @@index([caja_id])
+  @@index([usuario_id])
+  @@index([estado])
+}
+
+model MovimientosCaja {
+  id                Int                @id @default(autoincrement())
+  tipo              TipoMovimientoCaja
+  monto             Decimal            @db.Decimal(12, 2)
+  descripcion       String
+  referencia_tipo   String?            @db.VarChar(50)  // VENTA, NOTA_CREDITO, COMPRA, MANUAL, etc
+  referencia_id     String?            @db.VarChar(50)  // ID del documento referenciado
+  fecha             DateTime           @default(now())
+  tenant_id         Int
+  sesion_caja_id    Int
+  sesion_caja       SesionesCaja       @relation(fields: [sesion_caja_id], references: [id], onDelete: Cascade)
+  tenant            Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([sesion_caja_id])
+  @@index([referencia_tipo, referencia_id])
+}
+
+model Series {
+  id                 Int                     @id @default(autoincrement())
+  codigo             String
+  tipo_comprobante   Series_tipo_comprobante
+  correlativo_actual Int                     @default(0)
+  isActive           Boolean                 @default(true)
+  tenant_id          Int
+  caja_id            Int?
+  GuiasRemision      GuiasRemision[]
+  NotasCredito       NotasCredito[]
+  Ventas             Ventas[]
+  caja               Cajas?                  @relation(fields: [caja_id], references: [id])
+  tenant             Tenants                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, codigo])
+  @@index([tenant_id])
+  @@index([caja_id])
+  @@index([tipo_comprobante])
+}
+
+model AuditoriaLogs {
+  id             Int             @id @default(autoincrement())
+  usuario_id     Int
+  accion         AccionAuditoria
+  tabla_afectada String
+  registro_id    Int?
+  datos_antes    String?         @db.LongText
+  datos_despues  String?         @db.LongText
+  ip_address     String?
+  user_agent     String?
+  fecha          DateTime        @default(now())
+  tenant_id      Int
+  tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario        Usuarios        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([usuario_id])
+  @@index([accion])
+  @@index([tabla_afectada])
+  @@index([fecha])
+}
+
+model CuentasPorCobrar {
+  id                Int                     @id @default(autoincrement())
+  monto_total       Decimal                 @db.Decimal(12, 2)
+  monto_pagado      Decimal                 @default(0.00) @db.Decimal(12, 2)
+  saldo_pendiente   Decimal                 @db.Decimal(12, 2)
+  estado            CuentasPorCobrar_estado @default(VIGENTE)
+  fecha_emision     DateTime                @default(now())
+  fecha_vencimiento DateTime
+  fecha_ultimo_pago DateTime?
+  notas             String?                 @db.Text
+  tenant_id         Int
+  venta_id          Int                     @unique
+  cliente_id        Int
+  cliente           Clientes                @relation(fields: [cliente_id], references: [id])
+  tenant            Tenants                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  venta             Ventas                  @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+  pagos             Pagos[]
+
+  @@index([cliente_id])
+  @@index([estado])
+  @@index([fecha_vencimiento])
+  @@index([tenant_id])
+}
+
+model GuiaRemisionDetalles {
+  id               Int           @id @default(autoincrement())
+  producto_id      Int
+  cantidad         Decimal       @db.Decimal(12, 3)
+  tenant_id        Int
+  guia_remision_id Int
+  guia_remision    GuiasRemision @relation(fields: [guia_remision_id], references: [id], onDelete: Cascade)
+  producto         Productos     @relation(fields: [producto_id], references: [id])
+
+  @@index([guia_remision_id])
+  @@index([producto_id])
+  @@index([tenant_id])
+}
+
+model GuiasRemision {
+  id                         Int                           @id @default(autoincrement())
+  serie_id                   Int
+  numero                     Int
+  motivo_traslado            GuiasRemision_motivo_traslado
+  descripcion_motivo         String?                       @db.Text
+  peso_bruto_total           Decimal                       @db.Decimal(12, 2)
+  numero_bultos              Int
+  direccion_partida          String                        @db.Text
+  ubigeo_partida             String?
+  direccion_llegada          String                        @db.Text
+  ubigeo_llegada             String?
+  modalidad_transporte       String                        @default("PRIVADO")
+  ruc_transportista          String?
+  razon_social_transportista String?
+  placa_vehiculo             String?
+  licencia_conducir          String?
+  nombre_conductor           String?
+  estado_sunat               GuiasRemision_estado_sunat?   @default(PENDIENTE)
+  xml_url                    String?
+  cdr_url                    String?
+  hash_cpe                   String?
+  fecha_emision              DateTime                      @default(now())
+  fecha_inicio_traslado      DateTime
+  created_at                 DateTime                      @default(now())
+  tenant_id                  Int
+  venta_id                   Int?
+  usuario_id                 Int?
+  detalles                   GuiaRemisionDetalles[]
+  serie                      Series                        @relation(fields: [serie_id], references: [id])
+  usuario                    Usuarios?                     @relation(fields: [usuario_id], references: [id])
+  venta                      Ventas?                       @relation(fields: [venta_id], references: [id])
+
+  @@unique([serie_id, numero, tenant_id])
+  @@index([estado_sunat])
+  @@index([fecha_emision])
+  @@index([serie_id])
+  @@index([tenant_id])
+  @@index([usuario_id], map: "GuiasRemision_usuario_id_fkey")
+  @@index([venta_id])
+}
+
+model NotaCreditoDetalles {
+  id              Int          @id @default(autoincrement())
+  producto_id     Int
+  cantidad        Decimal      @db.Decimal(12, 3)
+  valor_unitario  Decimal      @db.Decimal(12, 2)
+  precio_unitario Decimal      @db.Decimal(12, 2)
+  igv_total       Decimal      @db.Decimal(12, 2)
+  tasa_igv        Decimal      @db.Decimal(5, 4)
+  tenant_id       Int
+  nota_credito_id Int
+  nota_credito    NotasCredito @relation(fields: [nota_credito_id], references: [id], onDelete: Cascade)
+  producto        Productos    @relation(fields: [producto_id], references: [id])
+
+  @@index([nota_credito_id])
+  @@index([producto_id])
+  @@index([tenant_id])
+}
+
+model NotasCredito {
+  id                  Int                        @id @default(autoincrement())
+  serie_id            Int
+  numero              Int
+  tipo_nota           NotasCredito_tipo_nota
+  motivo_sustento     String                     @db.Text
+  monto_total         Decimal                    @db.Decimal(12, 2)
+  stock_retornado     Boolean                    @default(false)
+  estado_sunat        NotasCredito_estado_sunat? @default(PENDIENTE)
+  xml_url             String?
+  cdr_url             String?
+  hash_cpe            String?
+  fecha_emision       DateTime                   @default(now())
+  created_at          DateTime                   @default(now())
+  tenant_id           Int
+  venta_referencia_id Int
+  usuario_id          Int?
+  efectivo_devuelto   Boolean                    @default(false)
+  fecha_devolucion    DateTime?
+  detalles            NotaCreditoDetalles[]
+  serie               Series                     @relation(fields: [serie_id], references: [id])
+  usuario             Usuarios?                  @relation(fields: [usuario_id], references: [id])
+  venta_referencia    Ventas                     @relation(fields: [venta_referencia_id], references: [id])
+
+  @@unique([serie_id, numero, tenant_id])
+  @@index([estado_sunat])
+  @@index([fecha_emision])
+  @@index([serie_id])
+  @@index([tenant_id])
+  @@index([usuario_id], map: "NotasCredito_usuario_id_fkey")
+  @@index([venta_referencia_id])
+}
+
+model Pagos {
+  id               Int               @id @default(autoincrement())
+  monto            Decimal           @db.Decimal(12, 2)
+  metodo_pago      Pagos_metodo_pago
+  referencia       String?
+  fecha_pago       DateTime          @default(now())
+  notas            String?           @db.Text
+  tenant_id        Int
+  cuenta_id        Int
+  usuario_id       Int?
+  cuenta_por_cobrar CuentasPorCobrar  @relation(fields: [cuenta_id], references: [id], onDelete: Cascade)
+  tenant           Tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario          Usuarios?         @relation(fields: [usuario_id], references: [id])
+
+  @@index([cuenta_id])
+  @@index([fecha_pago])
+  @@index([metodo_pago])
+  @@index([tenant_id])
+  @@index([usuario_id])
+}
+
+enum RolUsuario {
+  admin
+  empleado
+}
+
+enum TipoAjuste {
+  entrada
+  salida
+}
+
+enum EstadoOrdenCompra {
+  pendiente
+  recibida
+  cancelada
+}
+
+enum EstadoPedido {
+  pendiente
+  confirmado
+  cancelado
+  entregado
+}
+
+enum TipoRecojo {
+  tienda
+  envio
+}
+
+enum AfectacionIGV {
+  GRAVADO
+  EXONERADO
+  INAFECTO
+}
+
+enum AccionAuditoria {
+  CREAR
+  ACTUALIZAR
+  ELIMINAR
+  ANULAR
+  AJUSTAR
+  LOGIN
+  LOGOUT
+}
+
+enum EstadoSesionCaja {
+  ABIERTA
+  CERRADA
+}
+
+enum TipoMovimientoCaja {
+  INGRESO
+  EGRESO
+}
+
+enum TipoDocumento {
+  RUC
+  DNI
+  CE
+}
+
+enum Series_tipo_comprobante {
+  FACTURA
+  BOLETA
+  NOTA_VENTA
+  NOTA_CREDITO
+  NOTA_DEBITO
+  GUIA_REMISION
+}
+
+enum Pagos_metodo_pago {
+  EFECTIVO
+  TARJETA
+  TRANSFERENCIA
+  YAPE
+  PLIN
+  DEPOSITO
+  CHEQUE
+}
+
+enum GuiasRemision_motivo_traslado {
+  VENTA
+  COMPRA
+  TRASLADO_ENTRE_ESTABLECIMIENTOS
+  OTROS
+}
+
+enum NotasCredito_tipo_nota {
+  ANULACION_DE_LA_OPERACION
+  ANULACION_POR_ERROR_EN_EL_RUC
+  CORRECCION_POR_ERROR_EN_LA_DESCRIPCION
+  DESCUENTO_GLOBAL
+  DEVOLUCION_TOTAL
+  DEVOLUCION_PARCIAL
+  OTROS
+}
+
+enum CuentasPorCobrar_estado {
+  VIGENTE
+  POR_VENCER
+  VENCIDA
+  PAGADA
+  CANCELADA
+}
+
+enum NotasCredito_estado_sunat {
+  PENDIENTE
+  ACEPTADO
+  RECHAZADO
+  OBSERVADO
+}
+
+enum Ventas_condicion_pago {
+  CONTADO
+  CREDITO
+}
+
+enum Ventas_estado_pago {
+  PENDIENTE
+  PARCIAL
+  PAGADO
+}
+
+enum GuiasRemision_estado_sunat {
+  PENDIENTE
+  ACEPTADO
+  RECHAZADO
+  OBSERVADO
+}
+
+enum Ventas_estado_sunat {
+  PENDIENTE
+  ACEPTADO
+  RECHAZADO
+  OBSERVADO
+}
