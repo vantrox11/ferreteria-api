@@ -18,7 +18,7 @@ export const getVentasHandler = asyncHandler(
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = (req.query.q as string) || '';
-    
+
     // Validar límites razonables
     const validLimit = Math.min(Math.max(limit, 1), 100);
     const skip = (page - 1) * validLimit;
@@ -164,7 +164,7 @@ export const createVentaHandler = asyncHandler(
 
       // Obtener la venta completa con todos los campos actualizados (incluyendo estado_sunat)
       const ventaCompleta = await ventaModel.findVentaByIdAndTenant(tenantId, nuevaVenta.id);
-      
+
       if (usuarioId) {
         const ipAddress = req.ip ?? req.socket.remoteAddress ?? undefined;
         const userAgent = req.get('user-agent') ?? undefined;
@@ -185,7 +185,7 @@ export const createVentaHandler = asyncHandler(
           userAgent
         );
       }
-      
+
       // Devolver objeto completo según VentaResponseSchema con campos SUNAT
       res.status(201).json({
         id: ventaCompleta!.id,
@@ -229,7 +229,7 @@ export const createVentaHandler = asyncHandler(
       console.error('Error code:', error?.code);
       console.error('Error message:', error?.message);
       console.error('Body recibido:', JSON.stringify(req.body, null, 2));
-      
+
       if (error?.code === 'PRODUCTO_NOT_FOUND') {
         res.status(404).json({ message: error.message });
         return;
@@ -280,13 +280,21 @@ export const deleteVentaHandler = asyncHandler(
     const tenantId = req.tenantId!;
     const id = Number(req.params.id);
 
-    const deleted = await ventaModel.deleteVentaByIdAndTenant(tenantId, id);
-    if (!deleted) {
-      res.status(404).json({ message: 'Venta no encontrada.' });
-      return;
-    }
+    try {
+      const deleted = await ventaModel.deleteVentaByIdAndTenant(tenantId, id);
+      if (!deleted) {
+        res.status(404).json({ message: 'Venta no encontrada.' });
+        return;
+      }
 
-    res.status(200).json({ message: 'Venta eliminada exitosamente.' });
+      res.status(200).json({ message: 'Venta eliminada exitosamente.' });
+    } catch (error: any) {
+      if (error?.code === 'COMPROBANTE_SUNAT_ACEPTADO') {
+        res.status(403).json({ message: error.message });
+        return;
+      }
+      res.status(500).json({ message: 'Error al eliminar venta.' });
+    }
   }
 );
 

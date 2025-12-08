@@ -149,6 +149,18 @@ app.use('/api/guias-remision', guiasRemisionRoutes);
 app.use('/api/notas-credito', notasCreditoRoutes);
 app.use('/api/cuentas-por-cobrar', pagosRoutes);
 
+// Global Error Handler - Captura errores no manejados
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, req: Request, res: Response, _next: any) => {
+  console.error('❌ [ERROR GLOBAL]', err.message);
+  // En producción, no exponer stack trace
+  if (process.env.NODE_ENV === 'production') {
+    res.status(500).json({ message: 'Error interno del servidor' });
+  } else {
+    res.status(500).json({ message: err.message, stack: err.stack });
+  }
+});
+
 // Iniciar servidor
 try {
   app.listen(PORT, () => {
@@ -157,5 +169,3 @@ try {
 } catch (error: any) {
   console.error(`Error al iniciar el servidor: ${error.message}`);
 }
-
-

@@ -586,10 +586,21 @@ export const updateVentaByIdAndTenant = async (
 
 /**
  * Elimina una venta (uso muy limitado, considerar soft delete en producción)
+ * RESTRICCIÓN FISCAL: No permite eliminar comprobantes ACEPTADOS por SUNAT
  */
 export const deleteVentaByIdAndTenant = async (tenantId: number, id: number) => {
-  const existing = await db.ventas.findFirst({ where: { id, tenant_id: tenantId } });
+  const existing = await db.ventas.findFirst({
+    where: { id, tenant_id: tenantId },
+    select: { id: true, estado_sunat: true, numero_comprobante: true, serie_id: true }
+  });
   if (!existing) return null;
+
+  // RESTRICCIÓN FISCAL: No permitir eliminar comprobantes aceptados por SUNAT
+  if (existing.estado_sunat === 'ACEPTADO') {
+    const err = new Error('No se puede eliminar un comprobante aceptado por SUNAT. Use Nota de Crédito para anulaciones.');
+    (err as any).code = 'COMPROBANTE_SUNAT_ACEPTADO';
+    throw err;
+  }
 
   // Eliminar en cascada los detalles (configurado en Prisma)
   return db.ventas.delete({ where: { id } });

@@ -104,7 +104,7 @@ model Productos {
   nombre                 String
   sku                    String?
   descripcion            String?
-  costo_compra           Decimal?                @db.Decimal(12, 4) // Precisión fiscal
+  costo_compra           Decimal?                @db.Decimal(12, 4)
   stock                  Decimal                 @default(0.000) @db.Decimal(12, 3)
   stock_minimo           Int                     @default(5)
   tenant_id              Int
@@ -113,10 +113,10 @@ model Productos {
   marca_id               Int?
   unidad_medida_id       Int
   afectacion_igv         AfectacionIGV           @default(GRAVADO)
-  precio_base            Decimal                 @db.Decimal(12, 4) // Precisión fiscal
+  precio_base            Decimal                 @db.Decimal(12, 4)
   imagen_url             String?
-  version                Int                     @default(0) // Control de concurrencia optimista
-  deletedAt              DateTime? // Soft delete - nunca borrar productos con movimientos
+  version                Int                     @default(0)
+  deletedAt              DateTime?
   guia_remision_detalles GuiaRemisionDetalles[]
   movimientos_inventario MovimientosInventario[]
   nota_credito_detalles  NotaCreditoDetalles[]
@@ -143,20 +143,15 @@ model MovimientosInventario {
   saldo_anterior  Decimal                  @db.Decimal(12, 3)
   saldo_nuevo     Decimal                  @db.Decimal(12, 3)
   costo_unitario  Decimal?                 @db.Decimal(12, 4)
-
-  // Referencia al documento origen (polimórfica)
-  referencia_tipo String  @db.VarChar(30) // VENTA, COMPRA, AJUSTE, NOTA_CREDITO, DEVOLUCION
+  referencia_tipo String                   @db.VarChar(30)
   referencia_id   Int
-  motivo          String? @db.Text // Para ajustes manuales
-
-  // Metadatos
-  tenant_id  Int
-  usuario_id Int?
-  created_at DateTime @default(now()) @map("created_at")
-
-  producto Productos @relation(fields: [producto_id], references: [id])
-  tenant   Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  usuario  Usuarios? @relation(fields: [usuario_id], references: [id])
+  motivo          String?                  @db.Text
+  tenant_id       Int
+  usuario_id      Int?
+  created_at      DateTime                 @default(now()) @map("created_at")
+  producto        Productos                @relation(fields: [producto_id], references: [id])
+  tenant          Tenants                  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario         Usuarios?                @relation(fields: [usuario_id], references: [id])
 
   @@index([producto_id, created_at])
   @@index([tenant_id])
@@ -174,7 +169,7 @@ model Proveedores {
   tenant_id      Int
   isActive       Boolean         @default(true)
   tipo_documento TipoDocumento   @default(RUC)
-  deletedAt      DateTime? // Soft delete
+  deletedAt      DateTime?
   ordenes_compra OrdenesCompra[]
   tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
@@ -246,7 +241,7 @@ model Clientes {
   ruc                 String?
   dias_credito        Int                @default(0)
   limite_credito      Decimal            @default(0.00) @db.Decimal(12, 2)
-  deletedAt           DateTime? // Soft delete
+  deletedAt           DateTime?
   tenant              Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   cuentas_por_cobrar  CuentasPorCobrar[]
   pedidos             Pedidos[]
@@ -303,13 +298,13 @@ model Ventas {
 model VentaDetalles {
   id              Int       @id @default(autoincrement())
   cantidad        Decimal   @db.Decimal(12, 3)
-  precio_unitario Decimal   @db.Decimal(12, 4) // Precisión fiscal
+  precio_unitario Decimal   @db.Decimal(12, 4)
   tenant_id       Int
   venta_id        Int
   producto_id     Int
-  igv_total       Decimal   @db.Decimal(12, 4) // Precisión fiscal
+  igv_total       Decimal   @db.Decimal(12, 4)
   tasa_igv        Decimal   @db.Decimal(5, 4)
-  valor_unitario  Decimal   @db.Decimal(12, 4) // Precisión fiscal
+  valor_unitario  Decimal   @db.Decimal(12, 4)
   producto        Productos @relation(fields: [producto_id], references: [id])
   tenant          Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   venta           Ventas    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
@@ -397,8 +392,8 @@ model MovimientosCaja {
   tipo            TipoMovimientoCaja
   monto           Decimal            @db.Decimal(12, 2)
   descripcion     String
-  referencia_tipo String?            @db.VarChar(50) // VENTA, NOTA_CREDITO, COMPRA, MANUAL, etc
-  referencia_id   String?            @db.VarChar(50) // ID del documento referenciado
+  referencia_tipo String?            @db.VarChar(50)
+  referencia_id   String?            @db.VarChar(50)
   fecha           DateTime           @default(now())
   tenant_id       Int
   sesion_caja_id  Int
@@ -536,9 +531,9 @@ model NotaCreditoDetalles {
   id              Int          @id @default(autoincrement())
   producto_id     Int
   cantidad        Decimal      @db.Decimal(12, 3)
-  valor_unitario  Decimal      @db.Decimal(12, 4) // Precisión fiscal
-  precio_unitario Decimal      @db.Decimal(12, 4) // Precisión fiscal
-  igv_total       Decimal      @db.Decimal(12, 4) // Precisión fiscal
+  valor_unitario  Decimal      @db.Decimal(12, 4)
+  precio_unitario Decimal      @db.Decimal(12, 4)
+  igv_total       Decimal      @db.Decimal(12, 4)
   tasa_igv        Decimal      @db.Decimal(5, 4)
   tenant_id       Int
   nota_credito_id Int
