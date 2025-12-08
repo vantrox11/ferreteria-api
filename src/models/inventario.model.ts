@@ -1,9 +1,22 @@
 import { db } from '../config/db';
-import { TipoAjuste, Prisma } from '@prisma/client';
-import { type CreateInventarioAjusteDTO } from '../dtos/inventario.dto';
+import { TipoMovimientoInventario, Prisma } from '@prisma/client';
+import * as inventarioService from '../services/inventario.service';
 
 /**
- * Obtiene ajustes de inventario con paginación, búsqueda y filtros (SERVER-SIDE)
+ * DTO para crear ajuste de inventario (compatible con API existente)
+ */
+export interface CreateInventarioAjusteDTO {
+  producto_id: number;
+  tipo: 'entrada' | 'salida';
+  cantidad: number;
+  motivo: string;
+}
+
+/**
+ * Obtiene movimientos de inventario con paginación, búsqueda y filtros (SERVER-SIDE)
+ * 
+ * Nota: Reemplaza la tabla InventarioAjustes eliminada. Ahora consulta MovimientosInventario
+ * y filtra por tipos de ajuste (ENTRADA_AJUSTE, SALIDA_AJUSTE).
  */
 export const findInventarioAjustesPaginados = async (
   tenantId: number,
@@ -12,18 +25,26 @@ export const findInventarioAjustesPaginados = async (
     take: number;
     search?: string;
     producto_id?: number;
-    tipo?: TipoAjuste;
+    tipo?: 'entrada' | 'salida';
     fecha_inicio?: Date;
     fecha_fin?: Date;
   }
 ) => {
   const { skip, take, search, producto_id, tipo, fecha_inicio, fecha_fin } = params;
 
+  // Mapear tipo legacy a nuevo enum
+  const tiposMovimiento: TipoMovimientoInventario[] = tipo === 'entrada'
+    ? ['ENTRADA_AJUSTE']
+    : tipo === 'salida'
+      ? ['SALIDA_AJUSTE']
+      : ['ENTRADA_AJUSTE', 'SALIDA_AJUSTE'];
+
   // Construir condición de búsqueda
-  const whereClause: Prisma.InventarioAjustesWhereInput = {
+  const whereClause: Prisma.MovimientosInventarioWhereInput = {
     tenant_id: tenantId,
+    tipo_movimiento: { in: tiposMovimiento },
+    referencia_tipo: 'AJUSTE',
     ...(producto_id && { producto_id }),
-    ...(tipo && { tipo }),
     ...(fecha_inicio && { created_at: { gte: fecha_inicio } }),
     ...(fecha_fin && { created_at: { lte: fecha_fin } }),
     ...(search && {
@@ -37,8 +58,8 @@ export const findInventarioAjustesPaginados = async (
 
   // Ejecutar dos consultas en transacción
   const [total, data] = await db.$transaction([
-    db.inventarioAjustes.count({ where: whereClause }),
-    db.inventarioAjustes.findMany({
+    db.movimientosInventario.count({ where: whereClause }),
+    db.movimientosInventario.findMany({
       where: whereClause,
       skip,
       take,
@@ -50,60 +71,63 @@ export const findInventarioAjustesPaginados = async (
     }),
   ]);
 
-  return { total, data };
+  // Mapear a formato compatible con API existente
+  const mappedData = data.map(mov => ({
+    id: mov.id,
+    tipo: mov.tipo_movimiento === 'ENTRADA_AJUSTE' ? 'entrada' : 'salida',
+    cantidad: mov.cantidad,
+    motivo: mov.motivo,
+    created_at: mov.created_at,
+    producto: mov.producto,
+    usuario: mov.usuario,
+    // Campos adicionales del Kardex
+    saldo_anterior: mov.saldo_anterior,
+    saldo_nuevo: mov.saldo_nuevo,
+  }));
+
+  return { total, data: mappedData };
 };
 
 /**
- * Obtiene todos los ajustes de inventario de un tenant con filtros opcionales
- * @deprecated Usar findInventarioAjustesPaginados para listas grandes
- */
-export const findAllInventarioAjustesByTenant = async (
-  tenantId: number,
-  filters?: {
-    producto_id?: number;
-    tipo?: TipoAjuste;
-    fecha_inicio?: Date;
-    fecha_fin?: Date;
-  }
-) => {
-  return db.inventarioAjustes.findMany({
-    where: {
-      tenant_id: tenantId,
-      ...(filters?.producto_id && { producto_id: filters.producto_id }),
-      ...(filters?.tipo && { tipo: filters.tipo }),
-      ...(filters?.fecha_inicio && {
-        created_at: { gte: filters.fecha_inicio },
-      }),
-      ...(filters?.fecha_fin && {
-        created_at: { lte: filters.fecha_fin },
-      }),
-    },
-    orderBy: { created_at: 'desc' },
-    include: {
-      producto: { select: { id: true, nombre: true, sku: true, stock: true } },
-      usuario: { select: { id: true, nombre: true, email: true } },
-    },
-  });
-};
-
-/**
- * Busca un ajuste de inventario por ID validando pertenencia al tenant
+ * Busca un movimiento de inventario por ID validando pertenencia al tenant
  */
 export const findInventarioAjusteByIdAndTenant = async (
   tenantId: number,
   id: number
 ) => {
-  return db.inventarioAjustes.findFirst({
-    where: { id, tenant_id: tenantId },
+  const mov = await db.movimientosInventario.findFirst({
+    where: {
+      id,
+      tenant_id: tenantId,
+      referencia_tipo: 'AJUSTE',
+    },
     include: {
       producto: { select: { id: true, nombre: true, sku: true, stock: true } },
       usuario: { select: { id: true, nombre: true, email: true } },
     },
   });
+
+  if (!mov) return null;
+
+  // Mapear a formato compatible
+  return {
+    id: mov.id,
+    tipo: mov.tipo_movimiento === 'ENTRADA_AJUSTE' ? 'entrada' : 'salida',
+    cantidad: mov.cantidad,
+    motivo: mov.motivo,
+    created_at: mov.created_at,
+    producto: mov.producto,
+    usuario: mov.usuario,
+    saldo_anterior: mov.saldo_anterior,
+    saldo_nuevo: mov.saldo_nuevo,
+  };
 };
 
 /**
- * Crea un nuevo ajuste de inventario y actualiza el stock del producto (transacción)
+ * Crea un nuevo ajuste de inventario usando el servicio centralizado (Kardex)
+ * 
+ * Esta función mantiene la API compatible con el frontend existente pero
+ * internamente usa el sistema Kardex con bloqueo optimista.
  */
 export const createInventarioAjuste = async (
   data: CreateInventarioAjusteDTO,
@@ -111,81 +135,70 @@ export const createInventarioAjuste = async (
   usuarioId?: number
 ) => {
   return db.$transaction(async (tx) => {
-    // Verificar que el producto existe y pertenece al tenant
-    const producto = await tx.productos.findFirst({
-      where: { id: data.producto_id, tenant_id: tenantId },
-      select: { id: true, nombre: true, stock: true },
+    // Determinar tipo de movimiento
+    const tipoMovimiento: TipoMovimientoInventario =
+      data.tipo === 'entrada' ? 'ENTRADA_AJUSTE' : 'SALIDA_AJUSTE';
+
+    // Usar servicio centralizado para registrar movimiento
+    // El servicio ya valida stock y maneja bloqueo optimista
+    const resultado = await inventarioService.registrarMovimiento(tx, {
+      tenantId,
+      productoId: data.producto_id,
+      tipo: tipoMovimiento,
+      cantidad: Number(data.cantidad),
+      referenciaTipo: 'AJUSTE',
+      referenciaId: 0, // Se actualizará después
+      motivo: data.motivo,
+      usuarioId,
     });
 
-    if (!producto) {
-      const err = new Error(
-        `Producto con ID ${data.producto_id} no encontrado en este tenant`
-      );
-      (err as any).code = 'PRODUCTO_NOT_FOUND';
-      throw err;
-    }
-
-    // Validar que no se pueda hacer salida si no hay stock suficiente
-    if (data.tipo === 'salida' && Number(producto.stock) < Number(data.cantidad)) {
-      const err = new Error(
-        `Stock insuficiente para ajuste de salida. Stock actual: ${producto.stock}, Cantidad solicitada: ${data.cantidad}`
-      );
-      (err as any).code = 'STOCK_INSUFICIENTE';
-      throw err;
-    }
-
-    // Crear el ajuste
-    const nuevoAjuste = await tx.inventarioAjustes.create({
-      data: {
-        tenant_id: tenantId,
-        producto_id: data.producto_id,
-        tipo: data.tipo,
-        cantidad: data.cantidad,
-        motivo: data.motivo,
-        usuario_id: usuarioId ?? null,
-      },
+    // Actualizar referencia_id con el ID real del movimiento
+    await tx.movimientosInventario.update({
+      where: { id: resultado.id },
+      data: { referencia_id: resultado.id },
     });
 
-    // Actualizar stock del producto según el tipo de ajuste
-    if (data.tipo === 'entrada') {
-      await tx.productos.update({
-        where: { id: data.producto_id },
-        data: {
-          stock: {
-            increment: data.cantidad,
-          },
-        },
-      });
-    } else if (data.tipo === 'salida') {
-      await tx.productos.update({
-        where: { id: data.producto_id },
-        data: {
-          stock: {
-            decrement: data.cantidad,
-          },
-        },
-      });
-    }
+    // Obtener el movimiento completo para devolverlo
+    const movimiento = await tx.movimientosInventario.findUnique({
+      where: { id: resultado.id },
+    });
 
-    return nuevoAjuste;
+    // Devolver en formato compatible con API existente
+    return {
+      id: movimiento!.id,
+      tipo: data.tipo,
+      cantidad: movimiento!.cantidad,
+      motivo: movimiento!.motivo,
+      created_at: movimiento!.created_at,
+      producto_id: data.producto_id,
+      saldo_anterior: movimiento!.saldo_anterior,
+      saldo_nuevo: movimiento!.saldo_nuevo,
+    };
   });
 };
 
 /**
- * Elimina un ajuste de inventario
- * NOTA: En producción considerar NO permitir eliminación o implementar soft delete
- * y reversar el ajuste de stock
+ * Los ajustes de inventario NO se pueden eliminar en un ERP.
+ * Esta función se mantiene por compatibilidad pero lanza error.
+ * 
+ * Para "corregir" un ajuste, se debe crear un ajuste inverso.
  */
 export const deleteInventarioAjusteByIdAndTenant = async (
   tenantId: number,
   id: number
-) => {
-  const existing = await db.inventarioAjustes.findFirst({
-    where: { id, tenant_id: tenantId },
+): Promise<null> => {
+  // Verificar que existe
+  const existing = await db.movimientosInventario.findFirst({
+    where: { id, tenant_id: tenantId, referencia_tipo: 'AJUSTE' },
   });
+
   if (!existing) return null;
 
-  // NOTA: Al eliminar NO se reversa el stock automáticamente
-  // Considerar implementar lógica de reversa si es necesario
-  return db.inventarioAjustes.delete({ where: { id } });
+  // Los movimientos de inventario son inmutables en un ERP
+  const err = new Error(
+    'Los ajustes de inventario no pueden eliminarse. ' +
+    'Para corregir un error, cree un ajuste inverso (contraajuste).'
+  );
+  (err as any).code = 'MOVIMIENTO_INMUTABLE';
+  throw err;
 };

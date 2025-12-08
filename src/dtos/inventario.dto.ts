@@ -56,14 +56,22 @@ export const InventarioAjusteResponseSchema = registry.register(
     cantidad: z.number().openapi({
       example: 10.5,
     }),
-    motivo: z.string().openapi({
+    motivo: z.string().nullable().openapi({
       example: 'Corrección de inventario físico',
+    }),
+    saldo_anterior: z.number().optional().openapi({
+      description: 'Saldo antes del movimiento (Kardex)',
+      example: 50,
+    }),
+    saldo_nuevo: z.number().optional().openapi({
+      description: 'Saldo después del movimiento (Kardex)',
+      example: 60.5,
     }),
     usuario_id: z.number().int().nullable().openapi({
       description: 'ID del usuario que realizó el ajuste',
       example: 1,
     }),
-    tenant_id: z.number().int().openapi({
+    tenant_id: z.number().int().optional().openapi({
       example: 1,
     }),
     created_at: z.string().datetime().openapi({

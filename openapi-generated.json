@@ -1942,8 +1942,21 @@
             "example": 10.5
           },
           "motivo": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "example": "Corrección de inventario físico"
+          },
+          "saldo_anterior": {
+            "type": "number",
+            "description": "Saldo antes del movimiento (Kardex)",
+            "example": 50
+          },
+          "saldo_nuevo": {
+            "type": "number",
+            "description": "Saldo después del movimiento (Kardex)",
+            "example": 60.5
           },
           "usuario_id": {
             "type": [
@@ -1971,7 +1984,6 @@
           "cantidad",
           "motivo",
           "usuario_id",
-          "tenant_id",
           "created_at"
         ]
       },

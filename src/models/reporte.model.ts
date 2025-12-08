@@ -35,7 +35,7 @@ export const generarKardexCompleto = async (
             select: { codigo: true },
           },
           cliente: {
-            select: { 
+            select: {
               nombre: true,
               documento_identidad: true,
             },
@@ -65,7 +65,7 @@ export const generarKardexCompleto = async (
           serie: true,
           numero: true,
           proveedor: {
-            select: { 
+            select: {
               nombre: true,
               ruc_identidad: true,
             },
@@ -75,15 +75,16 @@ export const generarKardexCompleto = async (
     },
   });
 
-  // 3. Obtener ajustes manuales (entradas/salidas)
-  const ajustes = await db.inventarioAjustes.findMany({
+  // 3. Obtener ajustes manuales desde MovimientosInventario (entradas/salidas)
+  const ajustes = await db.movimientosInventario.findMany({
     where: {
       producto_id: productoId,
       tenant_id: tenantId,
+      referencia_tipo: 'AJUSTE',
     },
     select: {
       id: true,
-      tipo: true,
+      tipo_movimiento: true,
       cantidad: true,
       motivo: true,
       created_at: true,
@@ -148,10 +149,11 @@ export const generarKardexCompleto = async (
   ajustes.forEach((a) => {
     // Formato: AJUSTE-{id} o ADJ-{id_corto}
     const referencia = `ADJ-${String(a.id).padStart(4, '0')}`;
+    const esEntrada = a.tipo_movimiento === 'ENTRADA_AJUSTE' || a.tipo_movimiento === 'ENTRADA_DEVOLUCION';
 
     movimientos.push({
       fecha: a.created_at,
-      tipo: a.tipo === 'entrada' ? 'ajuste_entrada' : 'ajuste_salida',
+      tipo: esEntrada ? 'ajuste_entrada' : 'ajuste_salida',
       cantidad: Number(a.cantidad),
       referencia,
       motivo: a.motivo || undefined,

@@ -34,53 +34,53 @@ model Marcas {
 }
 
 model Tenants {
-  id                  Int                   @id @default(autoincrement())
-  nombre_empresa      String
-  subdominio          String                @unique
-  isActive            Boolean               @default(false)
-  configuracion       String?               @db.LongText
-  created_at          DateTime              @default(now()) @map("created_at")
-  AuditoriaLogs       AuditoriaLogs[]
-  Cajas               Cajas[]
-  Categorias          Categorias[]
-  Clientes            Clientes[]
-  CuentasPorCobrar    CuentasPorCobrar[]
-  InventarioAjustes   InventarioAjustes[]
-  Marcas              Marcas[]
-  MovimientosCaja     MovimientosCaja[]
-  OrdenCompraDetalles OrdenCompraDetalles[]
-  OrdenesCompra       OrdenesCompra[]
-  Pagos               Pagos[]
-  PedidoDetalles      PedidoDetalles[]
-  Pedidos             Pedidos[]
-  Productos           Productos[]
-  Proveedores         Proveedores[]
-  Series              Series[]
-  SesionesCaja        SesionesCaja[]
-  UnidadesMedida      UnidadesMedida[]
-  Usuarios            Usuarios[]
-  VentaDetalles       VentaDetalles[]
-  Ventas              Ventas[]
+  id                    Int                     @id @default(autoincrement())
+  nombre_empresa        String
+  subdominio            String                  @unique
+  isActive              Boolean                 @default(false)
+  configuracion         String?                 @db.LongText
+  created_at            DateTime                @default(now()) @map("created_at")
+  AuditoriaLogs         AuditoriaLogs[]
+  Cajas                 Cajas[]
+  Categorias            Categorias[]
+  Clientes              Clientes[]
+  CuentasPorCobrar      CuentasPorCobrar[]
+  MovimientosInventario MovimientosInventario[]
+  Marcas                Marcas[]
+  MovimientosCaja       MovimientosCaja[]
+  OrdenCompraDetalles   OrdenCompraDetalles[]
+  OrdenesCompra         OrdenesCompra[]
+  Pagos                 Pagos[]
+  PedidoDetalles        PedidoDetalles[]
+  Pedidos               Pedidos[]
+  Productos             Productos[]
+  Proveedores           Proveedores[]
+  Series                Series[]
+  SesionesCaja          SesionesCaja[]
+  UnidadesMedida        UnidadesMedida[]
+  Usuarios              Usuarios[]
+  VentaDetalles         VentaDetalles[]
+  Ventas                Ventas[]
 }
 
 model Usuarios {
-  id                  Int                 @id @default(autoincrement())
-  email               String
-  password_hash       String
-  nombre              String?
-  rol                 RolUsuario          @default(empleado)
-  tenant_id           Int
-  isActive            Boolean             @default(true)
-  auditoria_logs      AuditoriaLogs[]
-  GuiasRemision       GuiasRemision[]
-  ajustes_inventario  InventarioAjustes[]
-  NotasCredito        NotasCredito[]
-  ordenes_compra      OrdenesCompra[]
-  Pagos               Pagos[]
-  pedidos_gestionados Pedidos[]           @relation("UsuarioGestionPedido")
-  sesiones_caja       SesionesCaja[]
-  tenant              Tenants             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  ventas              Ventas[]
+  id                     Int                     @id @default(autoincrement())
+  email                  String
+  password_hash          String
+  nombre                 String?
+  rol                    RolUsuario              @default(empleado)
+  tenant_id              Int
+  isActive               Boolean                 @default(true)
+  auditoria_logs         AuditoriaLogs[]
+  GuiasRemision          GuiasRemision[]
+  movimientos_inventario MovimientosInventario[]
+  NotasCredito           NotasCredito[]
+  ordenes_compra         OrdenesCompra[]
+  Pagos                  Pagos[]
+  pedidos_gestionados    Pedidos[]               @relation("UsuarioGestionPedido")
+  sesiones_caja          SesionesCaja[]
+  tenant                 Tenants                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  ventas                 Ventas[]
 
   @@unique([tenant_id, email])
   @@index([tenant_id])
@@ -100,31 +100,33 @@ model Categorias {
 }
 
 model Productos {
-  id                   Int                    @id @default(autoincrement())
-  nombre               String
-  sku                  String?
-  descripcion          String?
-  costo_compra         Decimal?
-  stock                Decimal                @default(0.000) @db.Decimal(12, 3)
-  stock_minimo         Int                    @default(5)
-  tenant_id            Int
-  categoria_id         Int?
-  isActive             Boolean                @default(true)
-  marca_id             Int?
-  unidad_medida_id     Int
-  afectacion_igv       AfectacionIGV          @default(GRAVADO)
-  precio_base          Decimal                @db.Decimal(12, 2)
-  imagen_url           String?
+  id                     Int                     @id @default(autoincrement())
+  nombre                 String
+  sku                    String?
+  descripcion            String?
+  costo_compra           Decimal?                @db.Decimal(12, 4) // Precisión fiscal
+  stock                  Decimal                 @default(0.000) @db.Decimal(12, 3)
+  stock_minimo           Int                     @default(5)
+  tenant_id              Int
+  categoria_id           Int?
+  isActive               Boolean                 @default(true)
+  marca_id               Int?
+  unidad_medida_id       Int
+  afectacion_igv         AfectacionIGV           @default(GRAVADO)
+  precio_base            Decimal                 @db.Decimal(12, 4) // Precisión fiscal
+  imagen_url             String?
+  version                Int                     @default(0) // Control de concurrencia optimista
+  deletedAt              DateTime? // Soft delete - nunca borrar productos con movimientos
   guia_remision_detalles GuiaRemisionDetalles[]
-  inventario_ajustes   InventarioAjustes[]
-  nota_credito_detalles NotaCreditoDetalles[]
-  orden_compra_detalles OrdenCompraDetalles[]
-  pedido_detalles      PedidoDetalles[]
-  categoria            Categorias?            @relation(fields: [categoria_id], references: [id])
-  marca                Marcas?                @relation(fields: [marca_id], references: [id])
-  tenant               Tenants                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  unidad_medida        UnidadesMedida         @relation(fields: [unidad_medida_id], references: [id])
-  VentaDetalles        VentaDetalles[]
+  movimientos_inventario MovimientosInventario[]
+  nota_credito_detalles  NotaCreditoDetalles[]
+  orden_compra_detalles  OrdenCompraDetalles[]
+  pedido_detalles        PedidoDetalles[]
+  categoria              Categorias?             @relation(fields: [categoria_id], references: [id])
+  marca                  Marcas?                 @relation(fields: [marca_id], references: [id])
+  tenant                 Tenants                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  unidad_medida          UnidadesMedida          @relation(fields: [unidad_medida_id], references: [id])
+  VentaDetalles          VentaDetalles[]
 
   @@unique([tenant_id, sku])
   @@index([tenant_id])
@@ -133,21 +135,32 @@ model Productos {
   @@index([unidad_medida_id])
 }
 
-model InventarioAjustes {
-  id          Int        @id @default(autoincrement())
-  tipo        TipoAjuste
-  cantidad    Decimal    @db.Decimal(12, 3)
-  motivo      String
-  created_at  DateTime   @default(now()) @map("created_at")
-  tenant_id   Int
-  producto_id Int
-  usuario_id  Int?
-  producto    Productos  @relation(fields: [producto_id], references: [id], onDelete: Cascade)
-  tenant      Tenants    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  usuario     Usuarios?  @relation(fields: [usuario_id], references: [id])
+model MovimientosInventario {
+  id              Int                      @id @default(autoincrement())
+  producto_id     Int
+  tipo_movimiento TipoMovimientoInventario
+  cantidad        Decimal                  @db.Decimal(12, 3)
+  saldo_anterior  Decimal                  @db.Decimal(12, 3)
+  saldo_nuevo     Decimal                  @db.Decimal(12, 3)
+  costo_unitario  Decimal?                 @db.Decimal(12, 4)
 
+  // Referencia al documento origen (polimórfica)
+  referencia_tipo String  @db.VarChar(30) // VENTA, COMPRA, AJUSTE, NOTA_CREDITO, DEVOLUCION
+  referencia_id   Int
+  motivo          String? @db.Text // Para ajustes manuales
+
+  // Metadatos
+  tenant_id  Int
+  usuario_id Int?
+  created_at DateTime @default(now()) @map("created_at")
+
+  producto Productos @relation(fields: [producto_id], references: [id])
+  tenant   Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario  Usuarios? @relation(fields: [usuario_id], references: [id])
+
+  @@index([producto_id, created_at])
   @@index([tenant_id])
-  @@index([producto_id])
+  @@index([referencia_tipo, referencia_id])
   @@index([usuario_id])
 }
 
@@ -161,6 +174,7 @@ model Proveedores {
   tenant_id      Int
   isActive       Boolean         @default(true)
   tipo_documento TipoDocumento   @default(RUC)
+  deletedAt      DateTime? // Soft delete
   ordenes_compra OrdenesCompra[]
   tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
@@ -232,6 +246,7 @@ model Clientes {
   ruc                 String?
   dias_credito        Int                @default(0)
   limite_credito      Decimal            @default(0.00) @db.Decimal(12, 2)
+  deletedAt           DateTime? // Soft delete
   tenant              Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   cuentas_por_cobrar  CuentasPorCobrar[]
   pedidos             Pedidos[]
@@ -288,13 +303,13 @@ model Ventas {
 model VentaDetalles {
   id              Int       @id @default(autoincrement())
   cantidad        Decimal   @db.Decimal(12, 3)
-  precio_unitario Decimal   @db.Decimal(12, 2)
+  precio_unitario Decimal   @db.Decimal(12, 4) // Precisión fiscal
   tenant_id       Int
   venta_id        Int
   producto_id     Int
-  igv_total       Decimal   @db.Decimal(12, 2)
-  tasa_igv        Decimal   @db.Decimal(5, 2)
-  valor_unitario  Decimal   @db.Decimal(12, 2)
+  igv_total       Decimal   @db.Decimal(12, 4) // Precisión fiscal
+  tasa_igv        Decimal   @db.Decimal(5, 4)
+  valor_unitario  Decimal   @db.Decimal(12, 4) // Precisión fiscal
   producto        Productos @relation(fields: [producto_id], references: [id])
   tenant          Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   venta           Ventas    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
@@ -366,9 +381,9 @@ model SesionesCaja {
   caja_id        Int
   usuario_id     Int
   movimientos    MovimientosCaja[]
-  caja           Cajas             @relation(fields: [caja_id], references: [id], onDelete: Cascade)
+  caja           Cajas             @relation(fields: [caja_id], references: [id])
   tenant         Tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  usuario        Usuarios          @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  usuario        Usuarios          @relation(fields: [usuario_id], references: [id])
   ventas         Ventas[]
 
   @@index([tenant_id])
@@ -378,17 +393,17 @@ model SesionesCaja {
 }
 
 model MovimientosCaja {
-  id                Int                @id @default(autoincrement())
-  tipo              TipoMovimientoCaja
-  monto             Decimal            @db.Decimal(12, 2)
-  descripcion       String
-  referencia_tipo   String?            @db.VarChar(50)  // VENTA, NOTA_CREDITO, COMPRA, MANUAL, etc
-  referencia_id     String?            @db.VarChar(50)  // ID del documento referenciado
-  fecha             DateTime           @default(now())
-  tenant_id         Int
-  sesion_caja_id    Int
-  sesion_caja       SesionesCaja       @relation(fields: [sesion_caja_id], references: [id], onDelete: Cascade)
-  tenant            Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  id              Int                @id @default(autoincrement())
+  tipo            TipoMovimientoCaja
+  monto           Decimal            @db.Decimal(12, 2)
+  descripcion     String
+  referencia_tipo String?            @db.VarChar(50) // VENTA, NOTA_CREDITO, COMPRA, MANUAL, etc
+  referencia_id   String?            @db.VarChar(50) // ID del documento referenciado
+  fecha           DateTime           @default(now())
+  tenant_id       Int
+  sesion_caja_id  Int
+  sesion_caja     SesionesCaja       @relation(fields: [sesion_caja_id], references: [id], onDelete: Cascade)
+  tenant          Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id])
   @@index([sesion_caja_id])
@@ -428,7 +443,7 @@ model AuditoriaLogs {
   fecha          DateTime        @default(now())
   tenant_id      Int
   tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  usuario        Usuarios        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  usuario        Usuarios        @relation(fields: [usuario_id], references: [id])
 
   @@index([tenant_id])
   @@index([usuario_id])
@@ -521,9 +536,9 @@ model NotaCreditoDetalles {
   id              Int          @id @default(autoincrement())
   producto_id     Int
   cantidad        Decimal      @db.Decimal(12, 3)
-  valor_unitario  Decimal      @db.Decimal(12, 2)
-  precio_unitario Decimal      @db.Decimal(12, 2)
-  igv_total       Decimal      @db.Decimal(12, 2)
+  valor_unitario  Decimal      @db.Decimal(12, 4) // Precisión fiscal
+  precio_unitario Decimal      @db.Decimal(12, 4) // Precisión fiscal
+  igv_total       Decimal      @db.Decimal(12, 4) // Precisión fiscal
   tasa_igv        Decimal      @db.Decimal(5, 4)
   tenant_id       Int
   nota_credito_id Int
@@ -569,18 +584,18 @@ model NotasCredito {
 }
 
 model Pagos {
-  id               Int               @id @default(autoincrement())
-  monto            Decimal           @db.Decimal(12, 2)
-  metodo_pago      Pagos_metodo_pago
-  referencia       String?
-  fecha_pago       DateTime          @default(now())
-  notas            String?           @db.Text
-  tenant_id        Int
-  cuenta_id        Int
-  usuario_id       Int?
-  cuenta_por_cobrar CuentasPorCobrar  @relation(fields: [cuenta_id], references: [id], onDelete: Cascade)
-  tenant           Tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  usuario          Usuarios?         @relation(fields: [usuario_id], references: [id])
+  id                Int               @id @default(autoincrement())
+  monto             Decimal           @db.Decimal(12, 2)
+  metodo_pago       Pagos_metodo_pago
+  referencia        String?
+  fecha_pago        DateTime          @default(now())
+  notas             String?           @db.Text
+  tenant_id         Int
+  cuenta_id         Int
+  usuario_id        Int?
+  cuenta_por_cobrar CuentasPorCobrar  @relation(fields: [cuenta_id], references: [id])
+  tenant            Tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  usuario           Usuarios?         @relation(fields: [usuario_id], references: [id])
 
   @@index([cuenta_id])
   @@index([fecha_pago])
@@ -594,9 +609,13 @@ enum RolUsuario {
   empleado
 }
 
-enum TipoAjuste {
-  entrada
-  salida
+enum TipoMovimientoInventario {
+  ENTRADA_COMPRA
+  SALIDA_VENTA
+  ENTRADA_AJUSTE
+  SALIDA_AJUSTE
+  ENTRADA_DEVOLUCION
+  SALIDA_DEVOLUCION
 }
 
 enum EstadoOrdenCompra {

@@ -4,6 +4,7 @@ import { type CreateVentaDTO } from '../dtos/venta.dto';
 import * as tenantModel from './tenant.model';
 import { calcularTasaIGV, descomponerPrecioConIGV, type AfectacionIGV } from '../utils/fiscal.utils';
 import { obtenerFacturador, type DatosComprobante } from '../services/facturador.service';
+import * as inventarioService from '../services/inventario.service';
 
 /**
  * Calcula la fecha de vencimiento basándose en los días de crédito del cliente
@@ -21,7 +22,7 @@ const calcularFechaVencimiento = async (
   const diasCredito = cliente?.dias_credito ?? 30; // Default 30 días
   const fechaVencimiento = new Date();
   fechaVencimiento.setDate(fechaVencimiento.getDate() + diasCredito);
-  
+
   return fechaVencimiento;
 };
 
@@ -64,22 +65,22 @@ export const findVentasPaginadas = async (
       take,
       orderBy: { id: 'desc' },
       include: {
-        cliente: { 
-          select: { 
-            id: true, 
-            nombre: true, 
+        cliente: {
+          select: {
+            id: true,
+            nombre: true,
             documento_identidad: true,
-            direccion: true 
-          } 
+            direccion: true
+          }
         },
         usuario: { select: { id: true, nombre: true, email: true } },
-        serie: { 
-          select: { 
-            id: true, 
-            codigo: true, 
+        serie: {
+          select: {
+            id: true,
+            codigo: true,
             tipo_comprobante: true,
-            correlativo_actual: true 
-          } 
+            correlativo_actual: true
+          }
         },
         VentaDetalles: {
           include: {
@@ -170,10 +171,10 @@ export const createVenta = async (
   pedidoOrigenId?: number
 ) => {
   return db.$transaction(async (tx) => {
-    // 1. Obtener la caja de la sesión actual
+    // 1. Obtener la caja de la sesión actual y validar estado
     const sesion = await tx.sesionesCaja.findFirst({
       where: { id: sesionCajaId, tenant_id: tenantId },
-      select: { caja_id: true }
+      select: { caja_id: true, estado: true }
     });
 
     if (!sesion?.caja_id) {
@@ -182,17 +183,24 @@ export const createVenta = async (
       throw err;
     }
 
+    // VALIDACIÓN CRÍTICA: No permitir ventas en cajas cerradas
+    if (sesion.estado !== 'ABIERTA') {
+      const err = new Error('No se pueden registrar ventas en una caja cerrada. Abra una nueva sesión de caja.');
+      (err as any).code = 'CAJA_CERRADA';
+      throw err;
+    }
+
     // 2. Determinar tipo de comprobante
     // Prioridad: 1) Manual (data.tipo_comprobante), 2) Auto-detección por RUC, 3) Default BOLETA
     let tipoComprobante: 'FACTURA' | 'BOLETA' = data.tipo_comprobante || 'BOLETA';
-    
+
     if (!data.tipo_comprobante && data.cliente_id) {
       // Auto-detección: Primero revisar campo RUC, luego documento_identidad
       const cliente = await tx.clientes.findFirst({
         where: { id: data.cliente_id, tenant_id: tenantId },
         select: { ruc: true, documento_identidad: true }
       });
-      
+
       if (cliente?.ruc) {
         // Si tiene RUC → FACTURA
         tipoComprobante = 'FACTURA';
@@ -208,7 +216,7 @@ export const createVenta = async (
         where: { id: data.cliente_id, tenant_id: tenantId },
         select: { ruc: true, documento_identidad: true }
       });
-      
+
       if (!cliente?.ruc && !cliente?.documento_identidad?.match(/^[0-9]{11}$/)) {
         const err = new Error(
           'Para emitir FACTURA, el cliente debe tener RUC registrado. Use BOLETA para clientes con DNI.'
@@ -239,7 +247,7 @@ export const createVenta = async (
 
     // 4. Obtener configuración tributaria del tenant
     const fiscalConfig = await tenantModel.getTenantFiscalConfig(tenantId);
-    
+
     // 5. Validar stock PRIMERO (antes de incrementar correlativo)
     // Calcular total y preparar detalles con snapshot fiscal
     let total = 0;
@@ -256,11 +264,11 @@ export const createVenta = async (
     for (const detalle of data.detalles) {
       const producto = await tx.productos.findFirst({
         where: { id: detalle.producto_id, tenant_id: tenantId },
-        select: { 
-          id: true, 
-          stock: true, 
-          nombre: true, 
-          afectacion_igv: true 
+        select: {
+          id: true,
+          stock: true,
+          nombre: true,
+          afectacion_igv: true
         },
       });
 
@@ -331,7 +339,7 @@ export const createVenta = async (
         estado_pago: data.condicion_pago === 'CREDITO' ? 'PENDIENTE' : 'PAGADO',
         saldo_pendiente: data.condicion_pago === 'CREDITO' ? Number(total.toFixed(2)) : 0,
         monto_pagado: data.condicion_pago === 'CREDITO' ? 0 : Number(total.toFixed(2)),
-        fecha_vencimiento: data.condicion_pago === 'CREDITO' && data.cliente_id 
+        fecha_vencimiento: data.condicion_pago === 'CREDITO' && data.cliente_id
           ? await calcularFechaVencimiento(tx, tenantId, data.cliente_id)
           : null,
       },
@@ -353,14 +361,16 @@ export const createVenta = async (
         },
       });
 
-      // Descontar stock
-      await tx.productos.update({
-        where: { id: detalle.producto_id },
-        data: {
-          stock: {
-            decrement: detalle.cantidad,
-          },
-        },
+      // Descontar stock usando servicio centralizado con bloqueo optimista y Kardex
+      await inventarioService.registrarMovimiento(tx, {
+        tenantId,
+        productoId: detalle.producto_id,
+        tipo: 'SALIDA_VENTA',
+        cantidad: detalle.cantidad,
+        costoUnitario: detalle.precio_unitario,
+        referenciaTipo: 'VENTA',
+        referenciaId: nuevaVenta.id,
+        usuarioId: usuarioId,
       });
     }
 
@@ -432,7 +442,7 @@ export const createVenta = async (
               referencia_id: pago.id.toString(),
             },
           });
-          
+
           console.log(`💰 [VENTA] Ingreso automático por pago inicial en caja: S/ ${pagoInicial.toFixed(2)}`);
         }
 
@@ -444,20 +454,20 @@ export const createVenta = async (
     // 9. Emitir comprobante electrónico (Mock o Nubefact según ENV)
     try {
       const facturador = obtenerFacturador();
-      
+
       // Obtener datos completos del cliente para facturación
-      const clienteData = data.cliente_id 
+      const clienteData = data.cliente_id
         ? await tx.clientes.findFirst({
-            where: { id: data.cliente_id, tenant_id: tenantId },
-            select: {
-              nombre: true,
-              documento_identidad: true,
-              ruc: true,
-              razon_social: true,
-              direccion: true,
-              email: true,
-            }
-          })
+          where: { id: data.cliente_id, tenant_id: tenantId },
+          select: {
+            nombre: true,
+            documento_identidad: true,
+            ruc: true,
+            razon_social: true,
+            direccion: true,
+            email: true,
+          }
+        })
         : null;
 
       // Obtener datos del tenant para facturación
@@ -523,7 +533,7 @@ export const createVenta = async (
     } catch (error) {
       // Si falla la emisión, no revertir la venta pero loguearlo
       console.error('❌ [VENTA] Error al emitir comprobante:', error);
-      
+
       // Actualizar estado a PENDIENTE para retry manual
       await tx.ventas.update({
         where: { id: nuevaVenta.id },
@@ -546,7 +556,7 @@ export const createVenta = async (
           referencia_id: nuevaVenta.id.toString(),
         },
       });
-      
+
       console.log(`💰 [VENTA] Ingreso automático registrado en caja: S/ ${total.toFixed(2)}`);
     }
 

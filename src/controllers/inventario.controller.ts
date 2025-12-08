@@ -2,7 +2,6 @@ import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 import * as inventarioModel from '../models/inventario.model';
-import { TipoAjuste } from '@prisma/client';
 // Validación manejada por middleware validateRequest
 
 /**
@@ -16,7 +15,7 @@ export const getInventarioAjustesHandler = asyncHandler(
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = (req.query.q as string) || '';
-    
+
     // Validar límites razonables
     const validLimit = Math.min(Math.max(limit, 1), 100);
     const skip = (page - 1) * validLimit;
@@ -26,7 +25,7 @@ export const getInventarioAjustesHandler = asyncHandler(
       take: validLimit,
       search: search.trim() || undefined,
       producto_id: req.query.producto_id ? Number(req.query.producto_id) : undefined,
-      tipo: req.query.tipo as TipoAjuste | undefined,
+      tipo: req.query.tipo as 'entrada' | 'salida' | undefined,
       fecha_inicio: req.query.fecha_inicio ? new Date(req.query.fecha_inicio as string) : undefined,
       fecha_fin: req.query.fecha_fin ? new Date(req.query.fecha_fin as string) : undefined,
     };
@@ -41,17 +40,17 @@ export const getInventarioAjustesHandler = asyncHandler(
       created_at: a.created_at,
       producto: a.producto
         ? {
-            id: a.producto.id,
-            nombre: a.producto.nombre,
-            sku: a.producto.sku,
-            stock_actual: a.producto.stock,
-          }
+          id: a.producto.id,
+          nombre: a.producto.nombre,
+          sku: a.producto.sku,
+          stock_actual: a.producto.stock,
+        }
         : null,
       usuario: a.usuario
-        ? { 
-            id: a.usuario.id, 
-            nombre: a.usuario.nombre || a.usuario.email || 'Usuario sin nombre'
-          }
+        ? {
+          id: a.usuario.id,
+          nombre: a.usuario.nombre || a.usuario.email || 'Usuario sin nombre'
+        }
         : { id: 0, nombre: 'Sistema' },  // ✅ Mostrar "Sistema" cuando no hay usuario
     }));
 
@@ -92,18 +91,18 @@ export const getInventarioAjusteByIdHandler = asyncHandler(
       created_at: ajuste.created_at,
       producto: ajuste.producto
         ? {
-            id: ajuste.producto.id,
-            nombre: ajuste.producto.nombre,
-            sku: ajuste.producto.sku,
-            stock_actual: ajuste.producto.stock,
-          }
+          id: ajuste.producto.id,
+          nombre: ajuste.producto.nombre,
+          sku: ajuste.producto.sku,
+          stock_actual: ajuste.producto.stock,
+        }
         : null,
       usuario: ajuste.usuario
         ? {
-            id: ajuste.usuario.id,
-            nombre: ajuste.usuario.nombre,
-            email: ajuste.usuario.email,
-          }
+          id: ajuste.usuario.id,
+          nombre: ajuste.usuario.nombre,
+          email: ajuste.usuario.email,
+        }
         : null,
     });
   }
@@ -141,6 +140,10 @@ export const createInventarioAjusteHandler = asyncHandler(
         res.status(409).json({ message: error.message });
         return;
       }
+      if (error?.code === 'CONCURRENCY_CONFLICT') {
+        res.status(409).json({ message: error.message });
+        return;
+      }
       console.error('Error al crear ajuste de inventario:', error);
       res.status(500).json({ message: 'Error al crear ajuste de inventario.' });
     }
@@ -156,17 +159,26 @@ export const deleteInventarioAjusteHandler = asyncHandler(
     const tenantId = req.tenantId!;
     const id = Number(req.params.id);
 
-    const deleted = await inventarioModel.deleteInventarioAjusteByIdAndTenant(
-      tenantId,
-      id
-    );
-    if (!deleted) {
-      res.status(404).json({ message: 'Ajuste de inventario no encontrado.' });
-      return;
-    }
+    try {
+      const deleted = await inventarioModel.deleteInventarioAjusteByIdAndTenant(
+        tenantId,
+        id
+      );
+      if (!deleted) {
+        res.status(404).json({ message: 'Ajuste de inventario no encontrado.' });
+        return;
+      }
 
-    res.status(200).json({
-      message: 'Ajuste de inventario eliminado. NOTA: El stock NO fue reversado automáticamente.',
-    });
+      res.status(200).json({
+        message: 'Ajuste de inventario procesado.',
+      });
+    } catch (error: any) {
+      if (error?.code === 'MOVIMIENTO_INMUTABLE') {
+        res.status(403).json({ message: error.message });
+        return;
+      }
+      console.error('Error al procesar ajuste de inventario:', error);
+      res.status(500).json({ message: 'Error al procesar ajuste de inventario.' });
+    }
   }
 );

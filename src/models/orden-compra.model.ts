@@ -3,6 +3,7 @@ import { EstadoOrdenCompra } from '@prisma/client';
 import { type CreateOrdenCompraDTO, type UpdateOrdenCompraDTO, type RecibirOrdenCompraDTO } from '../dtos/orden-compra.dto';
 import { IGVCalculator } from '../services/igv-calculator.service';
 import { validarProveedorParaFactura, validarFormatoSerie, validarFormatoNumero } from '../utils/validaciones-fiscales';
+import * as inventarioService from '../services/inventario.service';
 
 /**
  * Obtiene todas las órdenes de compra de un tenant con filtros opcionales
@@ -83,11 +84,11 @@ export const createOrdenCompra = async (
     // Validar proveedor (ahora es obligatorio)
     const proveedor = await tx.proveedores.findFirst({
       where: { id: data.proveedor_id, tenant_id: tenantId },
-      select: { 
-        id: true, 
-        nombre: true, 
-        ruc_identidad: true, 
-        tipo_documento: true 
+      select: {
+        id: true,
+        nombre: true,
+        ruc_identidad: true,
+        tipo_documento: true
       },
     });
 
@@ -109,7 +110,7 @@ export const createOrdenCompra = async (
       cantidad: d.cantidad,
       costo_unitario: d.costo_unitario, // Ya viene con IGV incluido
     }));
-    
+
     const totales = IGVCalculator.calcularTotalesOrden(detallesParaCalculo);
 
     // Crear orden de compra con campos fiscales
@@ -119,18 +120,18 @@ export const createOrdenCompra = async (
         proveedor_id: data.proveedor_id,
         proveedor_ruc: proveedor.ruc_identidad,
         usuario_id: usuarioId ?? null,
-        
+
         // Campos fiscales
         tipo_comprobante: data.tipo_comprobante ?? null,
         serie: data.serie ?? null,
         numero: data.numero ?? null,
         fecha_emision: data.fecha_emision ? new Date(data.fecha_emision) : null,
-        
+
         // Totales con desglose IGV
         subtotal_base: totales.subtotal_base,
         impuesto_igv: totales.impuesto_igv,
         total: totales.total,
-        
+
         estado: 'pendiente',
       },
     });
@@ -138,14 +139,14 @@ export const createOrdenCompra = async (
     // Crear detalles de orden de compra con desglose IGV
     for (const detalle of data.detalles) {
       const desglose = IGVCalculator.calcularDesgloseCompra(detalle.costo_unitario);
-      
+
       await tx.ordenCompraDetalles.create({
         data: {
           tenant_id: tenantId,
           orden_compra_id: nuevaOrden.id,
           producto_id: detalle.producto_id,
           cantidad: detalle.cantidad,
-          
+
           // Costos con desglose IGV
           costo_unitario: detalle.costo_unitario, // Legacy - con IGV
           costo_unitario_total: detalle.costo_unitario, // Con IGV
@@ -256,15 +257,22 @@ export const recibirOrdenCompra = async (
       throw err;
     }
 
-    // Incrementar stock de cada producto
+    // Incrementar stock de cada producto usando servicio centralizado con Kardex
     for (const detalle of orden.OrdenCompraDetalles) {
-      await tx.productos.update({
-        where: { id: detalle.producto_id },
-        data: {
-          stock: {
-            increment: detalle.cantidad,
-          },
-        },
+      // Obtener costo unitario del detalle (necesitamos consulta adicional)
+      const detalleCompleto = await tx.ordenCompraDetalles.findFirst({
+        where: { orden_compra_id: id, producto_id: detalle.producto_id },
+        select: { costo_unitario: true },
+      });
+
+      await inventarioService.registrarMovimiento(tx, {
+        tenantId,
+        productoId: detalle.producto_id,
+        tipo: 'ENTRADA_COMPRA',
+        cantidad: Number(detalle.cantidad),
+        costoUnitario: detalleCompleto ? Number(detalleCompleto.costo_unitario) : undefined,
+        referenciaTipo: 'COMPRA',
+        referenciaId: id,
       });
     }
 
@@ -275,8 +283,8 @@ export const recibirOrdenCompra = async (
         estado: 'recibida',
         serie: datosRecepcion.serie,
         numero: datosRecepcion.numero,
-        fecha_recepcion: datosRecepcion.fecha_recepcion 
-          ? new Date(datosRecepcion.fecha_recepcion) 
+        fecha_recepcion: datosRecepcion.fecha_recepcion
+          ? new Date(datosRecepcion.fecha_recepcion)
           : new Date(),
       },
     });

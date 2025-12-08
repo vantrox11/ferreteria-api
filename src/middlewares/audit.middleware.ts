@@ -20,7 +20,7 @@ const ROUTE_TO_TABLE_MAP: Record<string, string> = {
   '/api/usuarios': 'Usuarios',
   '/api/pedidos': 'Pedidos',
   '/api/ordenes-compra': 'OrdenesCompra',
-  '/api/inventario-ajustes': 'InventarioAjustes',
+  '/api/inventario': 'MovimientosInventario',
   '/api/cajas': 'Cajas',
   '/api/sesiones-caja': 'SesionesCaja',
   '/api/series': 'Series',
@@ -53,7 +53,7 @@ const obtenerEstadoActual = async (
       Usuarios: db.usuarios,
       Pedidos: db.pedidos,
       OrdenesCompra: db.ordenesCompra,
-      InventarioAjustes: db.inventarioAjustes,
+      MovimientosInventario: db.movimientosInventario,
       Cajas: db.cajas,
       SesionesCaja: db.sesionesCaja,
       Series: db.series,
@@ -228,7 +228,7 @@ export const auditAjusteInventario = async (
       auditService.auditarAjuste(
         usuarioId,
         tenantId,
-        'InventarioAjustes',
+        'MovimientosInventario',
         body?.id,
         req.body, // Datos del request
         body, // Respuesta del servidor
