@@ -30,7 +30,7 @@ CREATE TABLE `Tenants` (
     `nombre_empresa` VARCHAR(191) NOT NULL,
     `subdominio` VARCHAR(191) NOT NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT false,
-    `configuracion` LONGTEXT NULL,
+    `configuracion` JSON NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     UNIQUE INDEX `Tenants_subdominio_key`(`subdominio`),
@@ -71,7 +71,7 @@ CREATE TABLE `Productos` (
     `nombre` VARCHAR(191) NOT NULL,
     `sku` VARCHAR(191) NULL,
     `descripcion` VARCHAR(191) NULL,
-    `costo_compra` DECIMAL(65, 30) NULL,
+    `costo_compra` DECIMAL(12, 4) NULL,
     `stock` DECIMAL(12, 3) NOT NULL DEFAULT 0.000,
     `stock_minimo` INTEGER NOT NULL DEFAULT 5,
     `tenant_id` INTEGER NOT NULL,
@@ -80,8 +80,10 @@ CREATE TABLE `Productos` (
     `marca_id` INTEGER NULL,
     `unidad_medida_id` INTEGER NOT NULL,
     `afectacion_igv` ENUM('GRAVADO', 'EXONERADO', 'INAFECTO') NOT NULL DEFAULT 'GRAVADO',
-    `precio_base` DECIMAL(12, 2) NOT NULL,
+    `precio_base` DECIMAL(12, 4) NOT NULL,
     `imagen_url` VARCHAR(191) NULL,
+    `version` INTEGER NOT NULL DEFAULT 0,
+    `deletedAt` DATETIME(3) NULL,
 
     INDEX `Productos_tenant_id_idx`(`tenant_id`),
     INDEX `Productos_categoria_id_idx`(`categoria_id`),
@@ -92,19 +94,29 @@ CREATE TABLE `Productos` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `InventarioAjustes` (
+CREATE TABLE `MovimientosInventario` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
-    `tipo` ENUM('entrada', 'salida') NOT NULL,
-    `cantidad` DECIMAL(12, 3) NOT NULL,
-    `motivo` VARCHAR(191) NOT NULL,
-    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `tenant_id` INTEGER NOT NULL,
     `producto_id` INTEGER NOT NULL,
+    `tipo_movimiento` ENUM('ENTRADA_COMPRA', 'SALIDA_VENTA', 'ENTRADA_AJUSTE', 'SALIDA_AJUSTE', 'ENTRADA_DEVOLUCION', 'SALIDA_DEVOLUCION') NOT NULL,
+    `cantidad` DECIMAL(12, 3) NOT NULL,
+    `saldo_anterior` DECIMAL(12, 3) NOT NULL,
+    `saldo_nuevo` DECIMAL(12, 3) NOT NULL,
+    `costo_unitario` DECIMAL(12, 4) NULL,
+    `venta_id` INTEGER NULL,
+    `orden_compra_id` INTEGER NULL,
+    `nota_credito_id` INTEGER NULL,
+    `ajuste_manual` BOOLEAN NOT NULL DEFAULT false,
+    `motivo` TEXT NULL,
+    `tenant_id` INTEGER NOT NULL,
     `usuario_id` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    INDEX `InventarioAjustes_tenant_id_idx`(`tenant_id`),
-    INDEX `InventarioAjustes_producto_id_idx`(`producto_id`),
-    INDEX `InventarioAjustes_usuario_id_idx`(`usuario_id`),
+    INDEX `MovimientosInventario_producto_id_created_at_idx`(`producto_id`, `created_at`),
+    INDEX `MovimientosInventario_tenant_id_idx`(`tenant_id`),
+    INDEX `MovimientosInventario_venta_id_idx`(`venta_id`),
+    INDEX `MovimientosInventario_orden_compra_id_idx`(`orden_compra_id`),
+    INDEX `MovimientosInventario_nota_credito_id_idx`(`nota_credito_id`),
+    INDEX `MovimientosInventario_usuario_id_idx`(`usuario_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -119,6 +131,7 @@ CREATE TABLE `Proveedores` (
     `tenant_id` INTEGER NOT NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `tipo_documento` ENUM('RUC', 'DNI', 'CE') NOT NULL DEFAULT 'RUC',
+    `deletedAt` DATETIME(3) NULL,
 
     INDEX `Proveedores_tenant_id_idx`(`tenant_id`),
     INDEX `Proveedores_tipo_documento_idx`(`tipo_documento`),
@@ -187,6 +200,7 @@ CREATE TABLE `Clientes` (
     `ruc` VARCHAR(191) NULL,
     `dias_credito` INTEGER NOT NULL DEFAULT 0,
     `limite_credito` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    `deletedAt` DATETIME(3) NULL,
 
     INDEX `Clientes_tenant_id_idx`(`tenant_id`),
     INDEX `Clientes_ruc_idx`(`ruc`),
@@ -234,17 +248,18 @@ CREATE TABLE `Ventas` (
 CREATE TABLE `VentaDetalles` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `cantidad` DECIMAL(12, 3) NOT NULL,
-    `precio_unitario` DECIMAL(12, 2) NOT NULL,
+    `precio_unitario` DECIMAL(12, 4) NOT NULL,
     `tenant_id` INTEGER NOT NULL,
     `venta_id` INTEGER NOT NULL,
     `producto_id` INTEGER NOT NULL,
-    `igv_total` DECIMAL(12, 2) NOT NULL,
-    `tasa_igv` DECIMAL(5, 2) NOT NULL,
-    `valor_unitario` DECIMAL(12, 2) NOT NULL,
+    `igv_total` DECIMAL(12, 4) NOT NULL,
+    `tasa_igv` DECIMAL(5, 4) NOT NULL,
+    `valor_unitario` DECIMAL(12, 4) NOT NULL,
 
     INDEX `VentaDetalles_tenant_id_idx`(`tenant_id`),
     INDEX `VentaDetalles_venta_id_idx`(`venta_id`),
     INDEX `VentaDetalles_producto_id_idx`(`producto_id`),
+    INDEX `VentaDetalles_tenant_id_venta_id_idx`(`tenant_id`, `venta_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -319,12 +334,19 @@ CREATE TABLE `MovimientosCaja` (
     `tipo` ENUM('INGRESO', 'EGRESO') NOT NULL,
     `monto` DECIMAL(12, 2) NOT NULL,
     `descripcion` VARCHAR(191) NOT NULL,
+    `venta_id` INTEGER NULL,
+    `nota_credito_id` INTEGER NULL,
+    `pago_id` INTEGER NULL,
+    `es_manual` BOOLEAN NOT NULL DEFAULT false,
     `fecha` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `tenant_id` INTEGER NOT NULL,
     `sesion_caja_id` INTEGER NOT NULL,
 
     INDEX `MovimientosCaja_tenant_id_idx`(`tenant_id`),
     INDEX `MovimientosCaja_sesion_caja_id_idx`(`sesion_caja_id`),
+    INDEX `MovimientosCaja_venta_id_idx`(`venta_id`),
+    INDEX `MovimientosCaja_nota_credito_id_idx`(`nota_credito_id`),
+    INDEX `MovimientosCaja_pago_id_idx`(`pago_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -352,8 +374,8 @@ CREATE TABLE `AuditoriaLogs` (
     `accion` ENUM('CREAR', 'ACTUALIZAR', 'ELIMINAR', 'ANULAR', 'AJUSTAR', 'LOGIN', 'LOGOUT') NOT NULL,
     `tabla_afectada` VARCHAR(191) NOT NULL,
     `registro_id` INTEGER NULL,
-    `datos_antes` LONGTEXT NULL,
-    `datos_despues` LONGTEXT NULL,
+    `datos_antes` JSON NULL,
+    `datos_despues` JSON NULL,
     `ip_address` VARCHAR(191) NULL,
     `user_agent` VARCHAR(191) NULL,
     `fecha` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -449,9 +471,9 @@ CREATE TABLE `NotaCreditoDetalles` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `producto_id` INTEGER NOT NULL,
     `cantidad` DECIMAL(12, 3) NOT NULL,
-    `valor_unitario` DECIMAL(12, 2) NOT NULL,
-    `precio_unitario` DECIMAL(12, 2) NOT NULL,
-    `igv_total` DECIMAL(12, 2) NOT NULL,
+    `valor_unitario` DECIMAL(12, 4) NOT NULL,
+    `precio_unitario` DECIMAL(12, 4) NOT NULL,
+    `igv_total` DECIMAL(12, 4) NOT NULL,
     `tasa_igv` DECIMAL(5, 4) NOT NULL,
     `tenant_id` INTEGER NOT NULL,
     `nota_credito_id` INTEGER NOT NULL,
@@ -480,6 +502,8 @@ CREATE TABLE `NotasCredito` (
     `tenant_id` INTEGER NOT NULL,
     `venta_referencia_id` INTEGER NOT NULL,
     `usuario_id` INTEGER NULL,
+    `efectivo_devuelto` BOOLEAN NOT NULL DEFAULT false,
+    `fecha_devolucion` DATETIME(3) NULL,
 
     INDEX `NotasCredito_estado_sunat_idx`(`estado_sunat`),
     INDEX `NotasCredito_fecha_emision_idx`(`fecha_emision`),
@@ -512,16 +536,16 @@ CREATE TABLE `Pagos` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `UnidadesMedida` ADD CONSTRAINT `UnidadesMedida_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `UnidadesMedida` ADD CONSTRAINT `UnidadesMedida_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Marcas` ADD CONSTRAINT `Marcas_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Marcas` ADD CONSTRAINT `Marcas_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Usuarios` ADD CONSTRAINT `Usuarios_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Usuarios` ADD CONSTRAINT `Usuarios_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Categorias` ADD CONSTRAINT `Categorias_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Categorias` ADD CONSTRAINT `Categorias_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Productos` ADD CONSTRAINT `Productos_categoria_id_fkey` FOREIGN KEY (`categoria_id`) REFERENCES `Categorias`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -530,28 +554,37 @@ ALTER TABLE `Productos` ADD CONSTRAINT `Productos_categoria_id_fkey` FOREIGN KEY
 ALTER TABLE `Productos` ADD CONSTRAINT `Productos_marca_id_fkey` FOREIGN KEY (`marca_id`) REFERENCES `Marcas`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Productos` ADD CONSTRAINT `Productos_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Productos` ADD CONSTRAINT `Productos_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Productos` ADD CONSTRAINT `Productos_unidad_medida_id_fkey` FOREIGN KEY (`unidad_medida_id`) REFERENCES `UnidadesMedida`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `InventarioAjustes` ADD CONSTRAINT `InventarioAjustes_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `MovimientosInventario` ADD CONSTRAINT `MovimientosInventario_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `InventarioAjustes` ADD CONSTRAINT `InventarioAjustes_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `MovimientosInventario` ADD CONSTRAINT `MovimientosInventario_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `InventarioAjustes` ADD CONSTRAINT `InventarioAjustes_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `MovimientosInventario` ADD CONSTRAINT `MovimientosInventario_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Proveedores` ADD CONSTRAINT `Proveedores_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `MovimientosInventario` ADD CONSTRAINT `MovimientosInventario_venta_id_fkey` FOREIGN KEY (`venta_id`) REFERENCES `Ventas`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `MovimientosInventario` ADD CONSTRAINT `MovimientosInventario_orden_compra_id_fkey` FOREIGN KEY (`orden_compra_id`) REFERENCES `OrdenesCompra`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `MovimientosInventario` ADD CONSTRAINT `MovimientosInventario_nota_credito_id_fkey` FOREIGN KEY (`nota_credito_id`) REFERENCES `NotasCredito`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Proveedores` ADD CONSTRAINT `Proveedores_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `OrdenesCompra` ADD CONSTRAINT `OrdenesCompra_proveedor_id_fkey` FOREIGN KEY (`proveedor_id`) REFERENCES `Proveedores`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `OrdenesCompra` ADD CONSTRAINT `OrdenesCompra_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `OrdenesCompra` ADD CONSTRAINT `OrdenesCompra_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `OrdenesCompra` ADD CONSTRAINT `OrdenesCompra_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -563,10 +596,10 @@ ALTER TABLE `OrdenCompraDetalles` ADD CONSTRAINT `OrdenCompraDetalles_orden_comp
 ALTER TABLE `OrdenCompraDetalles` ADD CONSTRAINT `OrdenCompraDetalles_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `OrdenCompraDetalles` ADD CONSTRAINT `OrdenCompraDetalles_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `OrdenCompraDetalles` ADD CONSTRAINT `OrdenCompraDetalles_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Clientes` ADD CONSTRAINT `Clientes_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Clientes` ADD CONSTRAINT `Clientes_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_cliente_id_fkey` FOREIGN KEY (`cliente_id`) REFERENCES `Clientes`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -581,7 +614,7 @@ ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_serie_id_fkey` FOREIGN KEY (`serie_i
 ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_sesion_caja_id_fkey` FOREIGN KEY (`sesion_caja_id`) REFERENCES `SesionesCaja`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -590,7 +623,7 @@ ALTER TABLE `Ventas` ADD CONSTRAINT `Ventas_usuario_id_fkey` FOREIGN KEY (`usuar
 ALTER TABLE `VentaDetalles` ADD CONSTRAINT `VentaDetalles_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `VentaDetalles` ADD CONSTRAINT `VentaDetalles_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `VentaDetalles` ADD CONSTRAINT `VentaDetalles_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `VentaDetalles` ADD CONSTRAINT `VentaDetalles_venta_id_fkey` FOREIGN KEY (`venta_id`) REFERENCES `Ventas`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -599,7 +632,7 @@ ALTER TABLE `VentaDetalles` ADD CONSTRAINT `VentaDetalles_venta_id_fkey` FOREIGN
 ALTER TABLE `Pedidos` ADD CONSTRAINT `Pedidos_cliente_id_fkey` FOREIGN KEY (`cliente_id`) REFERENCES `Clientes`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Pedidos` ADD CONSTRAINT `Pedidos_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Pedidos` ADD CONSTRAINT `Pedidos_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Pedidos` ADD CONSTRAINT `Pedidos_usuario_gestion_id_fkey` FOREIGN KEY (`usuario_gestion_id`) REFERENCES `Usuarios`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -611,49 +644,58 @@ ALTER TABLE `PedidoDetalles` ADD CONSTRAINT `PedidoDetalles_pedido_id_fkey` FORE
 ALTER TABLE `PedidoDetalles` ADD CONSTRAINT `PedidoDetalles_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `PedidoDetalles` ADD CONSTRAINT `PedidoDetalles_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PedidoDetalles` ADD CONSTRAINT `PedidoDetalles_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Cajas` ADD CONSTRAINT `Cajas_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Cajas` ADD CONSTRAINT `Cajas_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `SesionesCaja` ADD CONSTRAINT `SesionesCaja_caja_id_fkey` FOREIGN KEY (`caja_id`) REFERENCES `Cajas`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SesionesCaja` ADD CONSTRAINT `SesionesCaja_caja_id_fkey` FOREIGN KEY (`caja_id`) REFERENCES `Cajas`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `SesionesCaja` ADD CONSTRAINT `SesionesCaja_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SesionesCaja` ADD CONSTRAINT `SesionesCaja_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `SesionesCaja` ADD CONSTRAINT `SesionesCaja_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SesionesCaja` ADD CONSTRAINT `SesionesCaja_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_sesion_caja_id_fkey` FOREIGN KEY (`sesion_caja_id`) REFERENCES `SesionesCaja`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_sesion_caja_id_fkey` FOREIGN KEY (`sesion_caja_id`) REFERENCES `SesionesCaja`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_venta_id_fkey` FOREIGN KEY (`venta_id`) REFERENCES `Ventas`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_nota_credito_id_fkey` FOREIGN KEY (`nota_credito_id`) REFERENCES `NotasCredito`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `MovimientosCaja` ADD CONSTRAINT `MovimientosCaja_pago_id_fkey` FOREIGN KEY (`pago_id`) REFERENCES `Pagos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Series` ADD CONSTRAINT `Series_caja_id_fkey` FOREIGN KEY (`caja_id`) REFERENCES `Cajas`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Series` ADD CONSTRAINT `Series_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Series` ADD CONSTRAINT `Series_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `AuditoriaLogs` ADD CONSTRAINT `AuditoriaLogs_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `AuditoriaLogs` ADD CONSTRAINT `AuditoriaLogs_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `AuditoriaLogs` ADD CONSTRAINT `AuditoriaLogs_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `AuditoriaLogs` ADD CONSTRAINT `AuditoriaLogs_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `CuentasPorCobrar` ADD CONSTRAINT `CuentasPorCobrar_cliente_id_fkey` FOREIGN KEY (`cliente_id`) REFERENCES `Clientes`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CuentasPorCobrar` ADD CONSTRAINT `CuentasPorCobrar_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CuentasPorCobrar` ADD CONSTRAINT `CuentasPorCobrar_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CuentasPorCobrar` ADD CONSTRAINT `CuentasPorCobrar_venta_id_fkey` FOREIGN KEY (`venta_id`) REFERENCES `Ventas`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CuentasPorCobrar` ADD CONSTRAINT `CuentasPorCobrar_venta_id_fkey` FOREIGN KEY (`venta_id`) REFERENCES `Ventas`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `GuiaRemisionDetalles` ADD CONSTRAINT `GuiaRemisionDetalles_guia_remision_id_fkey` FOREIGN KEY (`guia_remision_id`) REFERENCES `GuiasRemision`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `GuiaRemisionDetalles` ADD CONSTRAINT `GuiaRemisionDetalles_guia_remision_id_fkey` FOREIGN KEY (`guia_remision_id`) REFERENCES `GuiasRemision`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `GuiaRemisionDetalles` ADD CONSTRAINT `GuiaRemisionDetalles_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -668,7 +710,7 @@ ALTER TABLE `GuiasRemision` ADD CONSTRAINT `GuiasRemision_usuario_id_fkey` FOREI
 ALTER TABLE `GuiasRemision` ADD CONSTRAINT `GuiasRemision_venta_id_fkey` FOREIGN KEY (`venta_id`) REFERENCES `Ventas`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `NotaCreditoDetalles` ADD CONSTRAINT `NotaCreditoDetalles_nota_credito_id_fkey` FOREIGN KEY (`nota_credito_id`) REFERENCES `NotasCredito`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `NotaCreditoDetalles` ADD CONSTRAINT `NotaCreditoDetalles_nota_credito_id_fkey` FOREIGN KEY (`nota_credito_id`) REFERENCES `NotasCredito`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `NotaCreditoDetalles` ADD CONSTRAINT `NotaCreditoDetalles_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `Productos`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -683,10 +725,10 @@ ALTER TABLE `NotasCredito` ADD CONSTRAINT `NotasCredito_usuario_id_fkey` FOREIGN
 ALTER TABLE `NotasCredito` ADD CONSTRAINT `NotasCredito_venta_referencia_id_fkey` FOREIGN KEY (`venta_referencia_id`) REFERENCES `Ventas`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Pagos` ADD CONSTRAINT `Pagos_cuenta_id_fkey` FOREIGN KEY (`cuenta_id`) REFERENCES `CuentasPorCobrar`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Pagos` ADD CONSTRAINT `Pagos_cuenta_id_fkey` FOREIGN KEY (`cuenta_id`) REFERENCES `CuentasPorCobrar`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Pagos` ADD CONSTRAINT `Pagos_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Pagos` ADD CONSTRAINT `Pagos_tenant_id_fkey` FOREIGN KEY (`tenant_id`) REFERENCES `Tenants`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Pagos` ADD CONSTRAINT `Pagos_usuario_id_fkey` FOREIGN KEY (`usuario_id`) REFERENCES `Usuarios`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

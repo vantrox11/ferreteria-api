@@ -304,11 +304,14 @@ export const createVenta = async (
     }
 
     // 6. AHORA SÍ: Incrementar correlativo de forma atómica (después de validar todo)
-    const nuevoCorrelativo = serie.correlativo_actual + 1;
-    await tx.series.update({
+    // BLINDAJE: Usa { increment: 1 } para que MySQL bloquee la fila y la incremente
+    // en una sola operación atómica. Esto evita race conditions cuando dos cajeros
+    // dan click a "Cobrar" en el mismo milisegundo.
+    const serieActualizada = await tx.series.update({
       where: { id: serie.id },
-      data: { correlativo_actual: nuevoCorrelativo }
+      data: { correlativo_actual: { increment: 1 } }
     });
+    const nuevoCorrelativo = serieActualizada.correlativo_actual;
 
     // 7. Crear venta con serie, correlativo y sesión de caja
     const nuevaVenta = await tx.ventas.create({
