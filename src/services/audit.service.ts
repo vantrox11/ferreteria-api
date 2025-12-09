@@ -32,10 +32,10 @@ export const registrarAuditoria = async (data: AuditLogData): Promise<void> => {
         accion: data.accion,
         tabla_afectada: data.tablaAfectada,
         registro_id: data.registroId,
-        datos_antes: data.datosAntes ? JSON.stringify(data.datosAntes) : null,
-        datos_despues: data.datosDespues ? JSON.stringify(data.datosDespues) : null,
-        ip_address: data.ipAddress || null,
-        user_agent: data.userAgent || null,
+        datos_antes: data.datosAntes ? JSON.stringify(data.datosAntes) : undefined,
+        datos_despues: data.datosDespues ? JSON.stringify(data.datosDespues) : undefined,
+        ip_address: data.ipAddress || undefined,
+        user_agent: data.userAgent || undefined,
       },
     });
   } catch (error) {

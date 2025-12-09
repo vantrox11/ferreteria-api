@@ -1,4 +1,4 @@
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { type Prisma } from '@prisma/client';
 import { type CreateClienteDTO, type UpdateClienteDTO } from '../dtos/cliente.dto';
 
@@ -27,7 +27,7 @@ export const findClientesPaginados = async (
   };
 
   // Ejecutar dos consultas en transacción para obtener total y datos
-  const [total, data] = await db.$transaction([
+  const [total, data] = await dbBase.$transaction([
     db.clientes.count({ where: whereClause }),
     db.clientes.findMany({
       where: whereClause,
@@ -46,7 +46,7 @@ export const findClientesPaginados = async (
  */
 export const findAllClientesByTenant = async (tenantId: number) => {
   return db.clientes.findMany({
-    where: { 
+    where: {
       tenant_id: tenantId,
       isActive: true,
     },
@@ -69,7 +69,7 @@ export const findClienteByIdAndTenant = async (tenantId: number, id: number) => 
 export const createCliente = async (
   data: CreateClienteDTO,
   tenantId: number,
-  tx?: Prisma.TransactionClient
+  tx?: any // Prisma.TransactionClient o cliente extendido
 ) => {
   const prismaClient = tx || db;
   return prismaClient.clientes.create({
@@ -120,8 +120,8 @@ export const updateClienteByIdAndTenant = async (
 export const desactivarClienteByIdAndTenant = async (tenantId: number, id: number) => {
   const existing = await db.clientes.findFirst({ where: { id, tenant_id: tenantId } });
   if (!existing) return null;
-  return db.clientes.update({ 
-    where: { id }, 
-    data: { isActive: false } 
+  return db.clientes.update({
+    where: { id },
+    data: { isActive: false }
   });
 };

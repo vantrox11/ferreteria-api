@@ -1,4 +1,4 @@
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { EstadoOrdenCompra } from '@prisma/client';
 import { type CreateOrdenCompraDTO, type UpdateOrdenCompraDTO, type RecibirOrdenCompraDTO } from '../dtos/orden-compra.dto';
 import { IGVCalculator } from '../services/igv-calculator.service';
@@ -64,7 +64,7 @@ export const createOrdenCompra = async (
   tenantId: number,
   usuarioId?: number
 ) => {
-  return db.$transaction(async (tx) => {
+  return dbBase.$transaction(async (tx) => {
     // Validar que todos los productos pertenezcan al tenant
     for (const detalle of data.detalles) {
       const producto = await tx.productos.findFirst({
@@ -206,7 +206,7 @@ export const recibirOrdenCompra = async (
   id: number,
   datosRecepcion: RecibirOrdenCompraDTO
 ) => {
-  return db.$transaction(async (tx) => {
+  return dbBase.$transaction(async (tx) => {
     // Verificar que la orden existe y está pendiente
     const orden = await tx.ordenesCompra.findFirst({
       where: { id, tenant_id: tenantId },

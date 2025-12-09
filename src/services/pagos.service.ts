@@ -8,7 +8,7 @@
  * - Cambio de estado de CxC (VIGENTE -> PAGADA)
  */
 
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { CreatePagoDTO } from '../dtos/pago.dto';
 
 /**
@@ -29,7 +29,7 @@ export const registrarPago = async (
   data: CreatePagoDTO,
   usuarioId: number
 ) => {
-  return db.$transaction(async (tx) => {
+  return dbBase.$transaction(async (tx) => {
     // 1. Validar que la CxC exista
     const cuentaPorCobrar = await tx.cuentasPorCobrar.findFirst({
       where: {

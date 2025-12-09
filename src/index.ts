@@ -35,6 +35,8 @@ import { auditMiddleware } from './middlewares/audit.middleware';
 // Tablas Maestras Normalizadas
 import unidadesMedidaRoutes from './routes/unidades-medida.routes';
 import marcasRoutes from './routes/marcas.routes';
+// Cron Jobs para tareas programadas
+import { initCronJobs } from './jobs/cron.manager';
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3001');
@@ -182,6 +184,9 @@ app.use((err: Error, req: Request, res: Response, _next: any) => {
 try {
   app.listen(PORT, () => {
     console.log(`🚀 Servidor Backend corriendo en http://localhost:${PORT}`);
+
+    // Iniciar tareas programadas (Cron Jobs)
+    initCronJobs();
   });
 } catch (error: any) {
   console.error(`Error al iniciar el servidor: ${error.message}`);

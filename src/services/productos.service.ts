@@ -1,4 +1,4 @@
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { type Prisma } from '@prisma/client';
 import { type CreateProductoDTO, type UpdateProductoDTO } from '../dtos/producto.dto';
 import * as tenantModel from './tenants.service';
@@ -51,7 +51,7 @@ export const findProductosPaginados = async (
   };
 
   // Ejecutar dos consultas en transacción para obtener total y datos
-  const [total, productos] = await db.$transaction([
+  const [total, productos] = await dbBase.$transaction([
     db.productos.count({ where: whereClause }),
     db.productos.findMany({
       where: whereClause,
@@ -153,7 +153,7 @@ export const findProductoByIdAndTenant = async (tenantId: number, id: number) =>
 export const createProducto = async (
   data: CreateProductoDTO,
   tenantId: number,
-  tx?: Prisma.TransactionClient
+  tx?: any // Prisma.TransactionClient o cliente extendido
 ) => {
   const prismaClient = tx || db;
   const { categoria_id, precio_venta, afectacion_igv, ...productoData } = data;

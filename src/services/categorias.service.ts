@@ -28,7 +28,7 @@ export const findCategoriasPaginadas = async (
  */
 export const findAllCategoriasByTenant = async (tenantId: number) => {
   return db.categorias.findMany({
-    where: { 
+    where: {
       tenant_id: tenantId,
       isActive: true,
     },
@@ -51,7 +51,7 @@ export const findCategoriaByIdAndTenant = async (tenantId: number, id: number) =
 export const createCategoria = async (
   data: CreateCategoriaDTO,
   tenantId: number,
-  tx?: Prisma.TransactionClient
+  tx?: any // Prisma.TransactionClient o cliente extendido
 ) => {
   const prismaClient = tx || db;
   return prismaClient.categorias.create({
@@ -88,8 +88,8 @@ export const updateCategoriaByIdAndTenant = async (
 export const desactivarCategoriaByIdAndTenant = async (tenantId: number, id: number) => {
   const existing = await db.categorias.findFirst({ where: { id, tenant_id: tenantId } });
   if (!existing) return null;
-  return db.categorias.update({ 
-    where: { id }, 
-    data: { isActive: false } 
+  return db.categorias.update({
+    where: { id },
+    data: { isActive: false }
   });
 };

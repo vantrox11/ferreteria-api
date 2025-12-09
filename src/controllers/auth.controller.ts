@@ -1,7 +1,7 @@
 import { type Request, type Response } from 'express';
 import * as tenantModel from '../services/tenants.service';
 import * as usuarioModel from '../services/usuarios.service';
-import { db } from '../config/db';
+import { dbBase } from '../config/db';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { RolUsuario } from '@prisma/client';
@@ -24,19 +24,19 @@ export const registerTenantHandler = asyncHandler(async (req: Request, res: Resp
 
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
-    
-    const result = await db.$transaction(async (tx) => {
+
+    const result = await dbBase.$transaction(async (tx) => {
         const newTenant = await tenantModel.createTenant(
             { nombre_empresa, subdominio },
             tx
         );
         const newAdmin = await usuarioModel.createUsuario(
-            { 
-                email, 
-                password_hash, 
-                rol: RolUsuario.admin, 
+            {
+                email,
+                password_hash,
+                rol: RolUsuario.admin,
                 nombre: `Administrador - ${nombre_empresa}`,  // ✅ Asignar nombre descriptivo
-                isActive: true 
+                isActive: true
             },
             newTenant.id,
             tx
@@ -58,7 +58,7 @@ export const registerTenantHandler = asyncHandler(async (req: Request, res: Resp
 
     // TODO: Implementar envío de email de validación con Resend
     console.log(`TODO: Enviar email de validación a ${email} con Resend.`);
-    
+
     res.status(201).json({
         message: "Tenant registrado exitosamente. Requiere activación manual en desarrollo.",
         tenant: {
@@ -83,7 +83,7 @@ export const loginHandler = asyncHandler(async (req: RequestWithTenant, res: Res
     }
 
     const usuario = await usuarioModel.findUsuarioByEmailAndTenant(tenantId, email);
-    
+
     if (!usuario || !(await bcrypt.compare(password, usuario.password_hash))) {
         res.status(401).json({ message: "Credenciales inválidas." });
         return;

@@ -1,6 +1,6 @@
 import { type Request, type Response } from 'express';
 import asyncHandler from 'express-async-handler';
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { Prisma } from '@prisma/client';
 import type { CreatePedidoPublicoDTO, CatalogoPublicoQueryDTO } from '../dtos/public.dto';
 
@@ -63,7 +63,7 @@ export const getCatalogoPublicoHandler = asyncHandler(
     const catalogo = productos.map((p) => {
       const precioBase = Number(p.precio_base);
       // Calcular precio de venta según afectación IGV
-      const precioVenta = p.afectacion_igv === 'GRAVADO' 
+      const precioVenta = p.afectacion_igv === 'GRAVADO'
         ? precioBase * 1.18  // Agregar 18% IGV
         : precioBase;        // Sin IGV (EXONERADO o INAFECTO)
 
@@ -179,7 +179,7 @@ export const createCheckoutPublicoHandler = asyncHandler(
       }
 
       // ============= PASO 3: Crear pedido en transacción =============
-      const pedido = await db.$transaction(async (tx) => {
+      const pedido = await dbBase.$transaction(async (tx) => {
         // Crear pedido
         const nuevoPedido = await tx.pedidos.create({
           data: {
@@ -217,7 +217,7 @@ export const createCheckoutPublicoHandler = asyncHandler(
 
     } catch (error: any) {
       console.error('❌ Error al crear pedido público:', error);
-      
+
       if (error?.code === 'P2002') {
         res.status(409).json({ message: 'Error de duplicación en base de datos' });
         return;

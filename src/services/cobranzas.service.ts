@@ -1,4 +1,4 @@
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { Prisma } from '@prisma/client';
 import { type CreatePagoDTO } from '../dtos/cobranza.dto';
 
@@ -99,7 +99,7 @@ export const createCuentaPorCobrar = async (
   tx?: any // Prisma.TransactionClient
 ) => {
   const saldoPendiente = montoTotal - montoPagado;
-  
+
   const prismaClient = tx || db;
 
   return prismaClient.cuentasPorCobrar.create({
@@ -125,7 +125,7 @@ export const registrarPago = async (
   pagoData: CreatePagoDTO,
   usuarioId: number
 ) => {
-  return db.$transaction(async (tx) => {
+  return dbBase.$transaction(async (tx) => {
     // 1. Obtener cuenta por cobrar
     const cuenta = await tx.cuentasPorCobrar.findFirst({
       where: {
@@ -194,7 +194,7 @@ export const registrarPago = async (
     // 4. Actualizar cuenta por cobrar
     const nuevoMontoPagado = Number(cuenta.monto_pagado) + pagoData.monto;
     const nuevoSaldo = Number(cuenta.monto_total) - nuevoMontoPagado;
-    
+
     let nuevoEstado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDA' | 'PAGADA' | 'CANCELADA' = cuenta.estado;
     if (nuevoSaldo === 0) {
       nuevoEstado = 'PAGADA';
@@ -271,7 +271,7 @@ export const findCobranzasPaginadas = async (
     }),
   };
 
-  const [total, data] = await db.$transaction([
+  const [total, data] = await dbBase.$transaction([
     db.cuentasPorCobrar.count({ where: whereClause }),
     db.cuentasPorCobrar.findMany({
       where: whereClause,

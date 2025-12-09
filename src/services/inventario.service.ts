@@ -1,6 +1,6 @@
 import { Prisma, TipoMovimientoInventario } from '@prisma/client';
 import { NotFoundError, StockInsuficienteError, ConcurrencyError, AppError } from '../utils/app-error';
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 
 /**
  * Servicio centralizado de inventario con bloqueo optimista.
@@ -295,7 +295,7 @@ export const findInventarioAjustesPaginados = async (
     };
 
     // Ejecutar dos consultas en transacción
-    const [total, data] = await db.$transaction([
+    const [total, data] = await dbBase.$transaction([
         db.movimientosInventario.count({ where: whereClause }),
         db.movimientosInventario.findMany({
             where: whereClause,
@@ -372,7 +372,7 @@ export const createInventarioAjuste = async (
     tenantId: number,
     usuarioId?: number
 ) => {
-    return db.$transaction(async (tx) => {
+    return dbBase.$transaction(async (tx) => {
         // Determinar tipo de movimiento
         const tipoMovimiento: TipoMovimientoInventario =
             data.tipo === 'entrada' ? 'ENTRADA_AJUSTE' : 'SALIDA_AJUSTE';

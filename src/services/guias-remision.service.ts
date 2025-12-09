@@ -9,7 +9,7 @@
  * - Series controladas por tabla Series (no hardcoded)
  */
 
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { CreateGuiaRemisionDTO } from '../dtos/guia-remision.dto';
 import { obtenerFacturador, type DatosGuiaRemision } from '../services/facturador.service';
 import { Prisma, Series_tipo_comprobante } from '@prisma/client';
@@ -30,7 +30,7 @@ export const createGuiaRemision = async (
   data: CreateGuiaRemisionDTO,
   usuarioId: number
 ) => {
-  return db.$transaction(async (tx) => {
+  return dbBase.$transaction(async (tx) => {
     // 1. Validar que la venta exista (si se proporcionó)
     if (data.venta_id) {
       const venta = await tx.ventas.findFirst({
@@ -39,7 +39,7 @@ export const createGuiaRemision = async (
           tenant_id: tenantId,
         },
       });
-      
+
       if (!venta) {
         throw Object.assign(
           new Error('Venta no encontrada'),
@@ -63,7 +63,7 @@ export const createGuiaRemision = async (
       // Verificar si la venta tiene NC de Anulación (01) o Devolución Total (07)
       // con estado ACEPTADO o PENDIENTE
       console.log('🔍 [GRE] Verificando existencia de NC bloqueantes...');
-      
+
       const notasCreditoBloqueantes = await tx.notasCredito.findMany({
         where: {
           tenant_id: tenantId,
@@ -90,11 +90,11 @@ export const createGuiaRemision = async (
 
       if (notasCreditoBloqueantes.length > 0) {
         const nc = notasCreditoBloqueantes[0];
-        const tipoDescripcion = nc.tipo_nota === 'ANULACION_DE_LA_OPERACION' 
-          ? 'ANULACIÓN DE LA OPERACIÓN' 
+        const tipoDescripcion = nc.tipo_nota === 'ANULACION_DE_LA_OPERACION'
+          ? 'ANULACIÓN DE LA OPERACIÓN'
           : 'DEVOLUCIÓN TOTAL';
         const serieNumero = `${nc.serie?.codigo || 'NC'}-${String(nc.numero).padStart(6, '0')}`;
-        
+
         throw Object.assign(
           new Error(
             `❌ No se puede emitir Guía de Remisión.\n\n` +
@@ -104,7 +104,7 @@ export const createGuiaRemision = async (
             `porque no existe mercadería válida para trasladar.\n\n` +
             `💡 Sugerencia: Verifica el estado de la venta en el historial de Notas de Crédito.`
           ),
-          { 
+          {
             code: 'VENTA_BLOQUEADA_POR_NC',
             data: {
               nota_credito_id: nc.id,
@@ -118,7 +118,7 @@ export const createGuiaRemision = async (
 
       console.log('✅ [GRE] No se encontraron NC bloqueantes. Venta válida para generar guía.');
     }
-    
+
     // 2. Validar que los productos existan
     for (const detalle of data.detalles) {
       const producto = await tx.productos.findFirst({
@@ -130,7 +130,7 @@ export const createGuiaRemision = async (
           unidad_medida: true,
         },
       });
-      
+
       if (!producto) {
         throw Object.assign(
           new Error(`Producto con ID ${detalle.producto_id} no encontrado`),
@@ -138,13 +138,13 @@ export const createGuiaRemision = async (
         );
       }
     }
-    
+
     // 3. Obtener serie activa para GUIA_REMISION
     const serieActiva = await obtenerSerieActiva(tenantId, Series_tipo_comprobante.GUIA_REMISION, undefined, tx);
     const nuevoCorrelativo = await incrementarCorrelativo(serieActiva.id, tx);
-    
+
     console.log(`📄 [GRE] Serie asignada: ${serieActiva.codigo}-${nuevoCorrelativo}`);
-    
+
     // 4. Crear la Guía de Remisión
     const guiaRemision = await tx.guiasRemision.create({
       data: {
@@ -172,7 +172,7 @@ export const createGuiaRemision = async (
         fecha_emision: new Date(),
       },
     });
-    
+
     // Crear detalles de la guía
     for (const detalle of data.detalles) {
       await tx.guiaRemisionDetalles.create({
@@ -184,10 +184,10 @@ export const createGuiaRemision = async (
         },
       });
     }
-    
+
     // 5. [ENVÍO A SUNAT] - Llamar al facturador (Mock o Real)
     console.log('📡 [GRE] Enviando a SUNAT...');
-    
+
     // Obtener nombres de productos para el XML
     const productosConNombres = await Promise.all(
       data.detalles.map(async (d) => {
@@ -202,7 +202,7 @@ export const createGuiaRemision = async (
         };
       })
     );
-    
+
     const datosParaSunat: DatosGuiaRemision = {
       serie: serieActiva.codigo,          // ✅ Usar código de la serie (ej: "T001")
       numero: nuevoCorrelativo,           // ✅ Usar nuevo correlativo
@@ -224,11 +224,11 @@ export const createGuiaRemision = async (
       numero_bultos: data.numero_bultos,
       items: productosConNombres,
     };
-    
+
     try {
       const facturador = obtenerFacturador();
       const respuestaSunat = await facturador.emitirGuiaRemision(datosParaSunat);
-      
+
       if (respuestaSunat.exito) {
         // Actualizar con datos de SUNAT
         await tx.guiasRemision.update({
@@ -240,7 +240,7 @@ export const createGuiaRemision = async (
             hash_cpe: respuestaSunat.hash_cpe,
           },
         });
-        
+
         console.log('✅ [GRE] ACEPTADA por SUNAT');
       } else {
         // Marcar como rechazada
@@ -250,7 +250,7 @@ export const createGuiaRemision = async (
             estado_sunat: 'RECHAZADO',
           },
         });
-        
+
         console.error('❌ [GRE] RECHAZADA por SUNAT:', respuestaSunat.mensaje);
       }
     } catch (error) {
@@ -263,7 +263,7 @@ export const createGuiaRemision = async (
         },
       });
     }
-    
+
     return guiaRemision;
   });
 };
@@ -287,24 +287,24 @@ export const listGuiasRemision = async (
   const page = filters.page || 1;
   const limit = filters.limit || 10;
   const skip = (page - 1) * limit;
-  
+
   const where: Prisma.GuiasRemisionWhereInput = {
     tenant_id: tenantId,
   };
-  
+
   // Filtros
   if (filters.venta_id) {
     where.venta_id = filters.venta_id;
   }
-  
+
   if (filters.estado_sunat) {
     where.estado_sunat = filters.estado_sunat as any;
   }
-  
+
   if (filters.motivo) {
     where.motivo_traslado = filters.motivo as any;
   }
-  
+
   if (filters.fecha_inicio || filters.fecha_fin) {
     where.fecha_emision = {};
     if (filters.fecha_inicio) {
@@ -314,14 +314,14 @@ export const listGuiasRemision = async (
       where.fecha_emision.lte = filters.fecha_fin;
     }
   }
-  
+
   if (filters.q) {
     where.OR = [
       { serie: { codigo: { contains: filters.q } } },  // ✅ Buscar en serie.codigo
       { numero: isNaN(Number(filters.q)) ? undefined : Number(filters.q) },
     ];
   }
-  
+
   const [data, total] = await Promise.all([
     db.guiasRemision.findMany({
       where,
@@ -357,7 +357,7 @@ export const listGuiasRemision = async (
     }),
     db.guiasRemision.count({ where }),
   ]);
-  
+
   return {
     data,
     pagination: {
@@ -405,13 +405,13 @@ export const getGuiaRemisionById = async (tenantId: number, id: number) => {
       },
     },
   });
-  
+
   if (!guiaRemision) {
     throw Object.assign(
       new Error('Guía de Remisión no encontrada'),
       { code: 'GRE_NOT_FOUND' }
     );
   }
-  
+
   return guiaRemision;
 };

@@ -5,9 +5,9 @@ import { type Prisma } from '@prisma/client';
  * Busca un tenant por su subdominio
  */
 export const findTenantBySubdominio = async (subdominio: string) => {
-    return db.tenants.findUnique({
-        where: { subdominio },
-    });
+  return db.tenants.findUnique({
+    where: { subdominio },
+  });
 };
 
 /**
@@ -15,51 +15,51 @@ export const findTenantBySubdominio = async (subdominio: string) => {
  * Inicializa configuración con datos básicos de la empresa
  */
 export const createTenant = async (
-    data: { nombre_empresa: string, subdominio: string },
-    tx: Prisma.TransactionClient
+  data: { nombre_empresa: string, subdominio: string },
+  tx: Prisma.TransactionClient
 ) => {
-    return tx.tenants.create({
-        data: {
-            nombre_empresa: data.nombre_empresa,
-            subdominio: data.subdominio,
-            configuracion: JSON.stringify({
-                empresa: {
-                    nombre_empresa: data.nombre_empresa,
-                    ruc: null,
-                    direccion: null,
-                    telefono: null,
-                    email: null
-                },
-                fiscal: {
-                    tasa_igv_global: 18.0,
-                    afectacion_igv_defecto: 'GRAVADO'
-                }
-            })
+  return tx.tenants.create({
+    data: {
+      nombre_empresa: data.nombre_empresa,
+      subdominio: data.subdominio,
+      configuracion: JSON.stringify({
+        empresa: {
+          nombre_empresa: data.nombre_empresa,
+          ruc: null,
+          direccion: null,
+          telefono: null,
+          email: null
         },
-    });
+        fiscal: {
+          tasa_igv_global: 18.0,
+          afectacion_igv_defecto: 'GRAVADO'
+        }
+      })
+    },
+  });
 };
 
 /**
  * Busca un tenant por su ID
  */
 export const findTenantById = async (id: number) => {
-    return db.tenants.findUnique({
-        where: { id },
-    });
+  return db.tenants.findUnique({
+    where: { id },
+  });
 };
 
 /**
  * Activa un tenant estableciendo isActive=true
  */
 export const activateTenantById = async (
-    id: number,
-    tx?: Prisma.TransactionClient
+  id: number,
+  tx?: any // Prisma.TransactionClient o cliente extendido
 ) => {
-    const prismaClient = tx || db;
-    return prismaClient.tenants.update({
-        where: { id },
-        data: { isActive: true },
-    });
+  const prismaClient = tx || db;
+  return prismaClient.tenants.update({
+    where: { id },
+    data: { isActive: true },
+  });
 };
 
 /**

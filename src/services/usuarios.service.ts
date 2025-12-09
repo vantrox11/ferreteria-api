@@ -6,7 +6,7 @@ import { type Usuarios, type Prisma, type RolUsuario } from '@prisma/client';
  */
 export const findAllUsuariosByTenant = async (tenantId: number) => {
   return db.usuarios.findMany({
-    where: { 
+    where: {
       tenant_id: tenantId,
       isActive: true,
     },
@@ -55,9 +55,9 @@ export const findUsuarioByEmailAndTenant = async (tenantId: number, email: strin
  * Crea un nuevo usuario dentro de una transacción
  */
 export const createUsuario = async (
-  data: Omit<Usuarios, 'id' | 'tenant_id'>, 
+  data: Omit<Usuarios, 'id' | 'tenant_id'>,
   tenantId: number,
-  tx?: Prisma.TransactionClient
+  tx?: any // Prisma.TransactionClient o cliente extendido
 ) => {
   const prisma = tx ?? db;
   return prisma.usuarios.create({
@@ -102,8 +102,8 @@ export const updateUsuarioByIdAndTenant = async (
 export const desactivarUsuarioByIdAndTenant = async (tenantId: number, id: number) => {
   const existing = await db.usuarios.findFirst({ where: { id, tenant_id: tenantId } });
   if (!existing) return null;
-  return db.usuarios.update({ 
-    where: { id }, 
+  return db.usuarios.update({
+    where: { id },
     data: { isActive: false },
     select: {
       id: true,

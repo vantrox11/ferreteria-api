@@ -1,4 +1,4 @@
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { Prisma } from '@prisma/client';
 import { type CreateVentaDTO } from '../dtos/venta.dto';
 import * as tenantModel from './tenants.service';
@@ -70,7 +70,7 @@ export const findVentasPaginadas = async (
   };
 
   // Ejecutar dos consultas en transacción
-  const [total, data] = await db.$transaction([
+  const [total, data] = await dbBase.$transaction([
     db.ventas.count({ where: whereClause }),
     db.ventas.findMany({
       where: whereClause,
@@ -186,7 +186,7 @@ export const createVenta = async (
   // ========================================================
   // PASO 1: TRANSACCIÓN DE BASE DE DATOS (rápida, sin HTTP)
   // ========================================================
-  const resultadoTx = await db.$transaction(async (tx) => {
+  const resultadoTx = await dbBase.$transaction(async (tx) => {
     // 1. Obtener la caja de la sesión actual y validar estado
     const sesion = await tx.sesionesCaja.findFirst({
       where: { id: sesionCajaId, tenant_id: tenantId },

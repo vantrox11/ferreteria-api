@@ -7,7 +7,7 @@ import { type CreateProveedorDTO, type UpdateProveedorDTO } from '../dtos/provee
  */
 export const findAllProveedoresByTenant = async (tenantId: number) => {
   return db.proveedores.findMany({
-    where: { 
+    where: {
       tenant_id: tenantId,
       isActive: true,
     },
@@ -30,7 +30,7 @@ export const findProveedorByIdAndTenant = async (tenantId: number, id: number) =
 export const createProveedor = async (
   data: CreateProveedorDTO,
   tenantId: number,
-  tx?: Prisma.TransactionClient
+  tx?: any // Prisma.TransactionClient o cliente extendido
 ) => {
   const prismaClient = tx || db;
   return prismaClient.proveedores.create({
@@ -75,8 +75,8 @@ export const updateProveedorByIdAndTenant = async (
 export const desactivarProveedorByIdAndTenant = async (tenantId: number, id: number) => {
   const existing = await db.proveedores.findFirst({ where: { id, tenant_id: tenantId } });
   if (!existing) return null;
-  return db.proveedores.update({ 
-    where: { id }, 
-    data: { isActive: false } 
+  return db.proveedores.update({
+    where: { id },
+    data: { isActive: false }
   });
 };

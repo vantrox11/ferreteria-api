@@ -11,7 +11,7 @@
  * ACTUALIZADO: Usa Decimal.js para precisión exacta en cálculos monetarios
  */
 
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { CreateNotaCreditoDTO } from '../dtos/nota-credito.dto';
 import { obtenerFacturador, type DatosNotaCredito } from '../services/facturador.service';
 import { Prisma, Series_tipo_comprobante } from '@prisma/client';
@@ -74,7 +74,7 @@ export const createNotaCredito = async (
   data: CreateNotaCreditoDTO,
   usuarioId: number
 ) => {
-  return db.$transaction(async (tx) => {
+  return dbBase.$transaction(async (tx) => {
     // 1. Obtener venta original con detalles
     const ventaOriginal = await tx.ventas.findFirst({
       where: {

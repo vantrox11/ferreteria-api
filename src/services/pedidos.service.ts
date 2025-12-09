@@ -1,4 +1,4 @@
-import { db } from '../config/db';
+import { db, dbBase } from '../config/db';
 import { Prisma, EstadoPedido } from '@prisma/client';
 
 /**
@@ -100,7 +100,7 @@ export const generarVentaDesdePedido = async (
   }, 0);
 
   // Transacción: crear venta y detalles
-  const venta = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  const venta = await dbBase.$transaction(async (tx) => {
     const nuevaVenta = await tx.ventas.create({
       data: {
         total: new Prisma.Decimal(total),
