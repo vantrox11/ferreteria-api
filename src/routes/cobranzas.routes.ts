@@ -13,14 +13,13 @@ import {
 } from '../controllers/cobranzas.controller';
 import { registry, commonResponses, SuccessResponseSchema } from '../config/openapi-registry';
 import {
-  CreatePagoSchema,
-  PagoResponseSchema,
   CuentaPorCobrarResponseSchema,
   PaginatedCobranzaResponseSchema,
   ListCobranzasQuerySchema,
   UpdateCuentaPorCobrarSchema,
   ResumenCobranzasSchema,
 } from '../dtos/cobranza.dto';
+import { CreatePagoSchema, PagoResponseSchema } from '../dtos/pago.dto';
 import { IdParamSchema } from '../dtos/common.dto';
 
 const router = Router();

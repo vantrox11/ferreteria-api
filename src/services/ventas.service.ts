@@ -112,7 +112,7 @@ export const findVentasPaginadas = async (
             }
           }
         },
-        CuentasPorCobrar: true, // Para derivar estado_pago y saldo_pendiente
+        CuentasPorCobrar: true, // Incluir estado de pago para ventas a crédito
       },
     }),
   ]);
@@ -167,7 +167,7 @@ export const findVentaByIdAndTenant = async (tenantId: number, id: number) => {
         },
       },
       pedido_origen: { select: { id: true, estado: true, tipo_recojo: true } },
-      CuentasPorCobrar: true, // Para derivar estado_pago y saldo_pendiente
+      CuentasPorCobrar: true, // Incluir estado de pago para ventas a crédito
     },
   });
 };
@@ -328,7 +328,7 @@ export const createVenta = async (
         serie_id: serie.id,
         numero_comprobante: nuevoCorrelativo,
         condicion_pago: data.condicion_pago || 'CONTADO',
-        // estado_pago, saldo_pendiente, monto_pagado → Derivados de CuentasPorCobrar
+        // estado_pago, saldo_pendiente, monto_pagado → En CuentasPorCobrar
       },
     });
 

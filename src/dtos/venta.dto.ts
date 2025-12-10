@@ -5,7 +5,7 @@ import { cantidadDecimalSchema, montoDecimalSchema } from './common.dto';
 
 extendZodWithOpenApi(z);
 
-// Alias para mantener compatibilidad semántica
+// Alias para montoDecimalSchema cuando se usa para precios
 const precioDecimalSchema = montoDecimalSchema;
 
 /**
@@ -101,32 +101,64 @@ const DetalleVentaResponseSchema = z.object({
       nombre: z.string(),
     }).nullable().optional(),
   }).optional(),
-  cantidad: z.number().openapi({ 
+  cantidad: z.number().openapi({
     description: 'Cantidad vendida (soporta decimales)',
-    example: 2.5 
+    example: 2.5
   }),
-  valor_unitario: z.number().openapi({ 
+  valor_unitario: z.number().openapi({
     description: 'Precio sin IGV (snapshot fiscal)',
-    example: 21.61 
+    example: 21.61
   }),
-  precio_unitario: z.number().openapi({ 
+  precio_unitario: z.number().openapi({
     description: 'Precio con IGV (snapshot fiscal)',
-    example: 25.50 
+    example: 25.50
   }),
-  igv_total: z.number().openapi({ 
+  igv_total: z.number().openapi({
     description: 'Monto de IGV de esta línea',
-    example: 9.72 
+    example: 9.72
   }),
-  tasa_igv: z.number().openapi({ 
+  tasa_igv: z.number().openapi({
     description: 'Tasa de IGV aplicada (ej: 18.00)',
-    example: 18.00 
+    example: 18.00
   }),
   tenant_id: z.number().int().openapi({ example: 1 }),
   venta_id: z.number().int().openapi({ example: 1 }),
 });
 
 /**
- * DTO de respuesta para venta (según schema.prisma: Ventas)
+ * Schema para cuenta por cobrar embebida en respuesta de venta
+ * Solo presente si condicion_pago === 'CREDITO'
+ */
+const CuentaPorCobrarEmbeddedSchema = z.object({
+  id: z.number().int().openapi({ example: 1 }),
+  estado: z.enum(['VIGENTE', 'POR_VENCER', 'VENCIDA', 'PAGADA', 'CANCELADA']).openapi({
+    description: 'Estado de la cuenta por cobrar',
+    example: 'VIGENTE',
+  }),
+  saldo_pendiente: z.number().openapi({
+    description: 'Saldo pendiente de pago',
+    example: 500.00,
+  }),
+  monto_pagado: z.number().openapi({
+    description: 'Monto pagado hasta el momento',
+    example: 0.00,
+  }),
+  monto_total: z.number().openapi({
+    description: 'Monto total de la cuenta',
+    example: 500.00,
+  }),
+  fecha_vencimiento: z.string().datetime().nullable().openapi({
+    description: 'Fecha de vencimiento',
+    example: '2025-12-16T14:30:00Z',
+  }),
+});
+
+/**
+ * DTO de respuesta para venta (estructura REAL sin campos fantasma)
+ * 
+ * NOTA: Los campos estado_pago, saldo_pendiente, fecha_vencimiento fueron ELIMINADOS
+ * porque no existen en la tabla Ventas.
+ * Para ventas a CREDITO, usar cuenta_por_cobrar para obtener estos datos.
  */
 export const VentaResponseSchema = registry.register(
   'Venta',
@@ -139,25 +171,13 @@ export const VentaResponseSchema = registry.register(
       description: 'Total de la venta',
       example: 63.75,
     }),
-    metodo_pago: z.string().nullable().openapi({ 
+    metodo_pago: z.string().nullable().openapi({
       description: 'Método de pago utilizado',
-      example: 'EFECTIVO' 
+      example: 'EFECTIVO'
     }),
-    condicion_pago: z.enum(['CONTADO', 'CREDITO']).openapi({ 
+    condicion_pago: z.enum(['CONTADO', 'CREDITO']).openapi({
       description: 'Condición de pago',
-      example: 'CONTADO' 
-    }),
-    estado_pago: z.enum(['PENDIENTE', 'PARCIAL', 'PAGADO']).openapi({ 
-      description: 'Estado del pago',
-      example: 'PAGADO' 
-    }),
-    fecha_vencimiento: z.string().datetime().nullable().openapi({
-      description: 'Fecha de vencimiento (solo para crédito)',
-      example: '2025-12-16T14:30:00Z',
-    }),
-    saldo_pendiente: z.number().openapi({
-      description: 'Saldo pendiente de pago',
-      example: 0.00,
+      example: 'CONTADO'
     }),
     created_at: z.string().datetime().openapi({
       description: 'Fecha y hora de creación',
@@ -169,6 +189,8 @@ export const VentaResponseSchema = registry.register(
       id: z.number().int(),
       nombre: z.string(),
       documento_identidad: z.string().nullable(),
+      ruc: z.string().nullable().optional(),
+      razon_social: z.string().nullable().optional(),
       direccion: z.string().nullable().optional(),
     }).nullable().optional(),
     usuario_id: z.number().int().nullable().openapi({ example: 1 }),
@@ -177,14 +199,14 @@ export const VentaResponseSchema = registry.register(
       nombre: z.string().nullable(),
       email: z.string(),
     }).nullable().optional(),
-    pedido_origen_id: z.number().int().nullable().openapi({ 
+    pedido_origen_id: z.number().int().nullable().openapi({
       description: 'ID del pedido que originó esta venta',
-      example: 1 
+      example: 1
     }),
     sesion_caja_id: z.number().int().nullable().openapi({ example: 1 }),
-    serie_id: z.number().int().nullable().openapi({ 
+    serie_id: z.number().int().nullable().openapi({
       description: 'ID de la serie de comprobante SUNAT',
-      example: 1 
+      example: 1
     }),
     serie: z.object({
       id: z.number().int(),
@@ -194,9 +216,9 @@ export const VentaResponseSchema = registry.register(
     }).nullable().optional().openapi({
       description: 'Datos de la serie SUNAT (expandido)',
     }),
-    numero_comprobante: z.number().int().nullable().openapi({ 
+    numero_comprobante: z.number().int().nullable().openapi({
       description: 'Número correlativo del comprobante',
-      example: 123 
+      example: 123
     }),
     estado_sunat: z.enum(['PENDIENTE', 'ACEPTADO', 'RECHAZADO', 'OBSERVADO']).nullable().openapi({
       description: 'Estado del comprobante en SUNAT',
@@ -217,6 +239,9 @@ export const VentaResponseSchema = registry.register(
     codigo_qr: z.string().nullable().openapi({
       description: 'Código QR del comprobante (URL o texto)',
       example: 'https://qr.sunat.gob.pe/...',
+    }),
+    cuenta_por_cobrar: CuentaPorCobrarEmbeddedSchema.nullable().openapi({
+      description: 'Cuenta por cobrar asociada (solo para ventas a CREDITO). Contiene estado de pago, saldo y vencimiento.',
     }),
     detalles: z.array(DetalleVentaResponseSchema).optional().openapi({
       description: 'Detalles de los productos vendidos',

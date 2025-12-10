@@ -5,7 +5,7 @@ import { cantidadDecimalSchema, montoDecimalSchema } from './common.dto';
 
 extendZodWithOpenApi(z);
 
-// Alias para mantener compatibilidad semántica
+// Alias para montoDecimalSchema cuando se usa para costos
 const costoDecimalSchema = montoDecimalSchema;
 
 /**
@@ -113,12 +113,13 @@ export type RecibirOrdenCompraDTO = z.infer<typeof RecibirOrdenCompraSchema>;
 
 /**
  * Schema para detalle de orden en respuesta (OrdenCompraDetalles)
+ * Incluye stock actual del producto para referencia
  */
 const DetalleOrdenCompraResponseSchema = z.object({
   id: z.number().int().openapi({ example: 1 }),
-  cantidad: z.number().openapi({ 
+  cantidad: z.number().openapi({
     description: 'Cantidad ordenada (soporta decimales)',
-    example: 50 
+    example: 50
   }),
   costo_unitario: z.number().openapi({ example: 15.50 }),
   tenant_id: z.number().int().openapi({ example: 1 }),
@@ -128,6 +129,7 @@ const DetalleOrdenCompraResponseSchema = z.object({
     id: z.number().int(),
     nombre: z.string(),
     sku: z.string().nullable(),
+    stock: z.number().openapi({ description: 'Stock actual del producto', example: 100 }),
   }).optional(),
 });
 
@@ -193,9 +195,9 @@ export const OrdenCompraResponseSchema = registry.register(
       ruc_identidad: z.string(),
       tipo_documento: z.string(),
     }).nullable().optional(),
-    usuario_id: z.number().int().nullable().openapi({ 
+    usuario_id: z.number().int().nullable().openapi({
       description: 'Usuario que creó la orden',
-      example: 1 
+      example: 1
     }),
     usuario: z.object({
       id: z.number().int(),

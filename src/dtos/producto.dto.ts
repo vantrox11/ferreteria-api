@@ -93,6 +93,38 @@ export type UpdateProductoDTO = z.infer<typeof UpdateProductoSchema>;
 /**
  * Schema de respuesta: Producto completo
  */
+/**
+ * Schema de la relación Marca (para respuestas)
+ */
+const MarcaRelacionSchema = z.object({
+  id: z.number().int().openapi({ example: 3 }),
+  nombre: z.string().openapi({ example: 'Stanley' }),
+}).nullable().optional().openapi({
+  description: 'Marca del producto',
+});
+
+/**
+ * Schema de la relación Categoría (para respuestas)
+ */
+const CategoriaRelacionSchema = z.object({
+  id: z.number().int().openapi({ example: 5 }),
+  nombre: z.string().openapi({ example: 'Herramientas Manuales' }),
+}).nullable().optional().openapi({
+  description: 'Categoría del producto',
+});
+
+/**
+ * Schema de la relación Unidad de Medida (para respuestas)
+ */
+const UnidadMedidaRelacionSchema = z.object({
+  id: z.number().int().openapi({ example: 1 }),
+  codigo: z.string().openapi({ example: 'NIU' }),
+  nombre: z.string().openapi({ example: 'Unidad' }),
+  permite_decimales: z.boolean().openapi({ example: false }),
+}).nullable().optional().openapi({
+  description: 'Unidad de medida del producto',
+});
+
 export const ProductoResponseSchema = registry.register(
   'Producto',
   z.object({
@@ -137,12 +169,15 @@ export const ProductoResponseSchema = registry.register(
     marca_id: z.number().int().nullable().openapi({
       example: 3,
     }),
+    marca: MarcaRelacionSchema,
     unidad_medida_id: z.number().int().openapi({
       example: 1,
     }),
+    unidad_medida: UnidadMedidaRelacionSchema,
     categoria_id: z.number().int().nullable().openapi({
       example: 5,
     }),
+    categoria: CategoriaRelacionSchema,
     isActive: z.boolean().openapi({
       description: 'Estado del producto (soft delete)',
       example: true,

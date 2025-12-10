@@ -217,9 +217,11 @@ export const DetalleCompletoMovimientoSchema = z.object({
   descripcion: z.string().openapi({ example: 'Venta F001-2040' }),
   monto: z.number().openapi({ example: 50.00 }),
   fecha_hora: z.string().datetime().openapi({ example: '2025-12-07T10:00:00Z' }),
-  referencia_tipo: z.string().nullable().openapi({ example: 'VENTA' }),
-  referencia_id: z.string().nullable().openapi({ example: '123' }),
-  es_automatico: z.boolean().openapi({ description: 'Indica si fue generado automáticamente', example: true }),
+  // FKs explícitas - estructura real de la BD
+  venta_id: z.number().int().nullable().openapi({ example: 123 }),
+  nota_credito_id: z.number().int().nullable().openapi({ example: null }),
+  pago_id: z.number().int().nullable().openapi({ example: null }),
+  es_manual: z.boolean().openapi({ description: 'Indica si es un movimiento manual', example: false }),
 });
 
 export const DetalleCompletoResponseSchema = registry.register(

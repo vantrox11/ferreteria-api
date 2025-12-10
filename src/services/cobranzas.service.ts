@@ -1,6 +1,6 @@
 import { db, dbBase } from '../config/db';
 import { Prisma } from '@prisma/client';
-import { type CreatePagoDTO } from '../dtos/cobranza.dto';
+import { type CreatePagoDTO } from '../dtos/pago.dto';
 
 /**
  * SEMÁFORO DE RIESGO CREDITICIO
@@ -117,114 +117,13 @@ export const createCuentaPorCobrar = async (
 };
 
 /**
- * Registra un pago (amortización) en una cuenta por cobrar
+ * ⚠️ NOTA: La función registrarPago fue ELIMINADA de este archivo.
+ * 
+ * RAZÓN: Esta función NO registraba el MovimientoCaja, causando descuadre financiero.
+ * 
+ * USO CORRECTO: Importar y usar registrarPago desde pagos.service.ts
+ * que sí tiene la lógica completa de trazabilidad financiera.
  */
-export const registrarPago = async (
-  tenantId: number,
-  cuentaId: number,
-  pagoData: CreatePagoDTO,
-  usuarioId: number
-) => {
-  return dbBase.$transaction(async (tx) => {
-    // 1. Obtener cuenta por cobrar
-    const cuenta = await tx.cuentasPorCobrar.findFirst({
-      where: {
-        id: cuentaId,
-        tenant_id: tenantId,
-      },
-      include: {
-        venta: true,
-      },
-    });
-
-    if (!cuenta) {
-      throw new Error('Cuenta por cobrar no encontrada');
-    }
-
-    // ✅ CRÍTICO: Validar estado de la cuenta
-    if (cuenta.estado === 'PAGADA') {
-      throw Object.assign(
-        new Error('No se pueden registrar pagos en una cuenta ya pagada'),
-        { code: 'CUENTA_YA_PAGADA' }
-      );
-    }
-
-    if (cuenta.estado === 'CANCELADA') {
-      throw Object.assign(
-        new Error('No se pueden registrar pagos en una cuenta cancelada'),
-        { code: 'CUENTA_CANCELADA' }
-      );
-    }
-
-    // 2. Validar que el monto no exceda la deuda
-    const saldoActual = Number(cuenta.saldo_pendiente);
-    if (pagoData.monto > saldoActual) {
-      throw Object.assign(
-        new Error(
-          `El monto del pago (S/ ${pagoData.monto.toFixed(
-            2
-          )}) excede la deuda pendiente (S/ ${saldoActual.toFixed(2)})`
-        ),
-        { code: 'MONTO_EXCEDE_DEUDA' }
-      );
-    }
-
-    // 3. Crear registro de pago
-    const pago = await tx.pagos.create({
-      data: {
-        tenant_id: tenantId,
-        cuenta_id: cuentaId,
-        monto: pagoData.monto,
-        metodo_pago: pagoData.metodo_pago,
-        referencia: pagoData.referencia,
-        notas: pagoData.notas,
-        usuario_id: usuarioId,
-      },
-      include: {
-        usuario: {
-          select: {
-            id: true,
-            nombre: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    // 4. Actualizar cuenta por cobrar
-    const nuevoMontoPagado = Number(cuenta.monto_pagado) + pagoData.monto;
-    const nuevoSaldo = Number(cuenta.monto_total) - nuevoMontoPagado;
-
-    let nuevoEstado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDA' | 'PAGADA' | 'CANCELADA' = cuenta.estado;
-    if (nuevoSaldo === 0) {
-      nuevoEstado = 'PAGADA';
-    } else if (nuevoSaldo < Number(cuenta.monto_total)) {
-      // Mantener estado actual si es parcial, o marcar como VIGENTE si estaba vencida
-      if (cuenta.estado === 'VIGENTE' || cuenta.estado === 'POR_VENCER') {
-        nuevoEstado = 'VIGENTE';
-      }
-    }
-
-    await tx.cuentasPorCobrar.update({
-      where: { id: cuentaId },
-      data: {
-        monto_pagado: nuevoMontoPagado,
-        saldo_pendiente: nuevoSaldo,
-        fecha_ultimo_pago: new Date(),
-        estado: nuevoEstado,
-      },
-    });
-
-    // Estado de pago se deriva ahora de CuentasPorCobrar (Single Source of Truth)
-    // Ya no actualizamos Ventas directamente
-
-    // Mapear nombres de relaciones para compatibilidad con frontend
-    return {
-      ...pago,
-      usuario: pago.usuario,
-    };
-  });
-};
 
 /**
  * Obtiene cuentas por cobrar con paginación y filtros
@@ -304,7 +203,7 @@ export const findCobranzasPaginadas = async (
     }),
   ]);
 
-  // Mapear nombres de relaciones para compatibilidad con frontend
+  // Mapear respuesta con relaciones incluidas
   const mappedData = data.map(cuenta => ({
     ...cuenta,
     cliente: cuenta.cliente,
@@ -373,7 +272,7 @@ export const findCuentaPorCobrarById = async (tenantId: number, cuentaId: number
 
   if (!cuenta) return null;
 
-  // Mapear nombres de relaciones para compatibilidad con frontend
+  // Mapear respuesta con relaciones incluidas
   return {
     ...cuenta,
     cliente: cuenta.cliente,

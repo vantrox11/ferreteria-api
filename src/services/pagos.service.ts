@@ -20,7 +20,7 @@ import { CreatePagoDTO } from '../dtos/pago.dto';
  * 3. Crear registro de pago en tabla Pagos
  * 4. Recalcular saldo_pendiente de la CxC
  * 5. Actualizar estado de la CxC (VIGENTE/PAGADA)
- * 6. Actualizar estado_pago de la Venta asociada
+ * 5. Registrar ingreso en MovimientosCaja (si hay sesión activa)
  * 7. [OPCIONAL] Registrar movimiento de caja si se especifica
  */
 export const registrarPago = async (

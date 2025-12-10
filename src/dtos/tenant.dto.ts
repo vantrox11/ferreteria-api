@@ -63,8 +63,28 @@ export const TenantConfiguracionResponseSchema = registry.register(
           example: false,
         }),
       }).optional(),
+      empresa: z.object({
+        ruc: z.string().optional().openapi({
+          description: 'RUC de la empresa',
+          example: '20123456789',
+        }),
+        direccion: z.string().optional().openapi({
+          description: 'Dirección fiscal de la empresa',
+          example: 'Av. Industrial 123, Lima',
+        }),
+        telefono: z.string().optional().openapi({
+          description: 'Teléfono de la empresa',
+          example: '01-2345678',
+        }),
+        email: z.string().email().optional().openapi({
+          description: 'Email de contacto de la empresa',
+          example: 'contacto@ferreteria.com',
+        }),
+      }).optional().openapi({
+        description: 'Datos de la empresa para comprobantes',
+      }),
     }).nullable().openapi({
-      description: 'Configuración general del tenant (pedidos, emails, facturación)',
+      description: 'Configuración general del tenant (pedidos, emails, facturación, empresa)',
     }),
     created_at: z.string().datetime().openapi({
       description: 'Fecha de creación',

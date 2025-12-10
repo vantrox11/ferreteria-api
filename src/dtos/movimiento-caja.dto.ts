@@ -43,6 +43,10 @@ export type CreateMovimientoCajaDTO = z.infer<typeof CreateMovimientoCajaSchema>
 
 /**
  * DTO de respuesta para movimiento de caja
+ * 
+ * NOTA: Se usan FKs explícitas (venta_id, nota_credito_id, pago_id) en lugar
+ * de campos polimórficos virtuales (referencia_tipo, referencia_id).
+ * Frontend debe verificar qué FK no es null para determinar el tipo.
  */
 export const MovimientoCajaResponseSchema = registry.register(
   'MovimientoCaja',
@@ -63,13 +67,22 @@ export const MovimientoCajaResponseSchema = registry.register(
       description: 'Descripción detallada del movimiento',
       example: 'Devolución efectivo NC B001-123 - FERRETERÍA LÓPEZ SAC',
     }),
-    referencia_tipo: z.string().nullable().optional().openapi({
-      description: 'Tipo de documento referenciado',
-      example: 'NOTA_CREDITO',
+    // FKs explícitas - exactamente como están en la BD
+    venta_id: z.number().int().nullable().openapi({
+      description: 'ID de la venta asociada (si aplica)',
+      example: 123,
     }),
-    referencia_id: z.string().nullable().optional().openapi({
-      description: 'ID del documento referenciado',
-      example: '123',
+    nota_credito_id: z.number().int().nullable().openapi({
+      description: 'ID de la nota de crédito asociada (si aplica)',
+      example: null,
+    }),
+    pago_id: z.number().int().nullable().openapi({
+      description: 'ID del pago asociado (si aplica)',
+      example: null,
+    }),
+    es_manual: z.boolean().openapi({
+      description: 'Indica si es un movimiento manual (sin documento asociado)',
+      example: false,
     }),
     fecha: z.string().datetime().openapi({
       description: 'Fecha del movimiento',
@@ -90,3 +103,4 @@ export const MovimientoCajaResponseSchema = registry.register(
 );
 
 export type MovimientoCajaResponseDTO = z.infer<typeof MovimientoCajaResponseSchema>;
+

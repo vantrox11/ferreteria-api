@@ -36,7 +36,7 @@ registry.registerPath({
 3. Crea registro en tabla Pagos
 4. Recalcula saldo_pendiente de la CxC
 5. Actualiza estado de la CxC (VIGENTE → PAGADA si saldo = 0)
-6. Actualiza estado_pago de la Venta (PENDIENTE → PARCIAL → PAGADO)
+6. Registra movimiento de caja (INGRESO) si hay sesión activa
 
 **Validaciones:**
 - Monto > 0

@@ -9,10 +9,6 @@ export function createTenantExtension() {
         name: 'tenantFilter',
         model: {
             $allModels: {
-                // 🚨 SOLUCIÓN CRÍTICA: Interceptamos findUnique y lo convertimos en findFirst
-                // para poder inyectar el filtro tenant_id sin errores de Prisma.
-                // Prisma requiere que findUnique use solo campos con @unique, pero tenant_id
-                // no es parte de esas claves únicas en la mayoría de modelos.
                 async findUnique<T, A>(
                     this: T,
                     args: Prisma.Exact<A, Prisma.Args<T, 'findUnique'>>
@@ -21,9 +17,12 @@ export function createTenantExtension() {
                     const modelName = (context.$name as string).toLowerCase();
                     const tenantId = getTenantId();
 
-                    // Si es un modelo global o no hay contexto de tenant, comportamiento normal
+                    // Si es un modelo global o no hay contexto de tenant
                     if (MODELOS_SIN_TENANT.includes(modelName) || tenantId === undefined) {
-                        return (context as any).findUnique(args);
+                        // 🚨 CORRECCIÓN AQUÍ: Usamos findFirst en lugar de findUnique
+                        // para evitar que la extensión se llame a sí misma infinitamente.
+                        // Como 'args.where' ya tiene una clave única, el resultado es el mismo.
+                        return (context as any).findFirst(args);
                     }
 
                     // Transformación a findFirst segura para permitir filtros arbitrarios
@@ -70,7 +69,6 @@ export function createTenantExtension() {
                     if (operation === 'upsert') {
                         args.where = { ...args.where, tenant_id: tenantId };
                         args.create = { ...args.create, tenant_id: tenantId };
-                        // En update de upsert usualmente no se toca el tenant_id
                     }
 
                     return query(args);

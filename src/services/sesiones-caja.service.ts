@@ -693,36 +693,19 @@ class SesionCajaModel {
       monto_devoluciones: montoDevoluciones,
     };
 
-    // Mapear movimientos con flag de automático y derivar referencia_tipo para compatibilidad
-    const movimientos = sesion.movimientos.map((m) => {
-      // Derivar referencia_tipo para compatibilidad con API existente
-      let referenciaTipo: string | null = null;
-      let referenciaId: string | null = null;
-
-      if (m.venta_id) {
-        referenciaTipo = 'VENTA';
-        referenciaId = m.venta_id.toString();
-      } else if (m.nota_credito_id) {
-        referenciaTipo = 'NOTA_CREDITO';
-        referenciaId = m.nota_credito_id.toString();
-      } else if (m.pago_id) {
-        referenciaTipo = 'PAGO';
-        referenciaId = m.pago_id.toString();
-      } else if (m.es_manual) {
-        referenciaTipo = 'MANUAL';
-      }
-
-      return {
-        id: m.id,
-        tipo: m.tipo,
-        descripcion: m.descripcion,
-        monto: Number(m.monto),
-        fecha_hora: m.fecha,
-        referencia_tipo: referenciaTipo,
-        referencia_id: referenciaId,
-        es_automatico: !m.es_manual,
-      };
-    });
+    // Mapear movimientos con FKs explícitas (estructura real de BD)
+    const movimientos = sesion.movimientos.map((m) => ({
+      id: m.id,
+      tipo: m.tipo,
+      descripcion: m.descripcion,
+      monto: Number(m.monto),
+      fecha_hora: m.fecha,
+      // FKs directas - estructura real
+      venta_id: m.venta_id,
+      nota_credito_id: m.nota_credito_id,
+      pago_id: m.pago_id,
+      es_manual: m.es_manual,
+    }));
 
     return {
       sesion: this.mapSesionToDTO(sesion),

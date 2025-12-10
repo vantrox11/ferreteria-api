@@ -9,34 +9,6 @@ import { db } from '../config/db';
 import { isAppError, AppError } from '../utils/app-error';
 
 /**
- * Helper: Deriva estado_pago, saldo_pendiente y fecha_vencimiento desde CuentasPorCobrar
- * CuentasPorCobrar es la ÚNICA fuente de verdad para estos campos
- */
-const derivarDatosPago = (venta: any) => {
-  if (venta.condicion_pago === 'CREDITO' && venta.CuentasPorCobrar) {
-    const cxc = venta.CuentasPorCobrar;
-    // Mapear estado de CxC a estado_pago de venta
-    let estadoPago: 'PENDIENTE' | 'PARCIAL' | 'PAGADO' = 'PENDIENTE';
-    if (cxc.estado === 'PAGADA' || Number(cxc.saldo_pendiente) === 0) {
-      estadoPago = 'PAGADO';
-    } else if (Number(cxc.monto_pagado) > 0) {
-      estadoPago = 'PARCIAL';
-    }
-    return {
-      estado_pago: estadoPago,
-      saldo_pendiente: Number(cxc.saldo_pendiente),
-      fecha_vencimiento: cxc.fecha_vencimiento,
-    };
-  }
-  // CONTADO: siempre pagado
-  return {
-    estado_pago: 'PAGADO' as const,
-    saldo_pendiente: 0,
-    fecha_vencimiento: null,
-  };
-};
-
-/**
  * GET /api/ventas — Lista todas las ventas del tenant con paginación, búsqueda y filtros
  */
 export const getVentasHandler = asyncHandler(
@@ -64,47 +36,51 @@ export const getVentasHandler = asyncHandler(
 
     const { total, data: ventas } = await ventaModel.findVentasPaginadas(tenantId, filters);
 
-    // Devolver objeto completo según VentaResponseSchema (derivando datos de pago de CxC)
-    const result = ventas.map((v) => {
-      const datosPago = derivarDatosPago(v);
-      return {
-        id: v.id,
-        total: v.total,
-        metodo_pago: v.metodo_pago,
-        condicion_pago: v.condicion_pago,
-        estado_pago: datosPago.estado_pago,
-        fecha_vencimiento: datosPago.fecha_vencimiento,
-        saldo_pendiente: datosPago.saldo_pendiente,
-        created_at: v.created_at,
-        tenant_id: v.tenant_id,
-        cliente_id: v.cliente_id,
-        cliente: v.cliente,
-        usuario_id: v.usuario_id,
-        usuario: v.usuario,
-        pedido_origen_id: v.pedido_origen_id,
-        sesion_caja_id: v.sesion_caja_id,
-        serie_id: v.serie_id,
-        serie: v.serie,
-        numero_comprobante: v.numero_comprobante,
-        estado_sunat: v.estado_sunat,
-        xml_url: v.xml_url,
-        cdr_url: v.cdr_url,
-        hash_cpe: v.hash_cpe,
-        codigo_qr: v.codigo_qr,
-        detalles: v.VentaDetalles.map((d) => ({
-          id: d.id,
-          producto_id: d.producto_id,
-          producto: d.producto,
-          cantidad: d.cantidad,
-          valor_unitario: d.valor_unitario,
-          precio_unitario: d.precio_unitario,
-          igv_total: d.igv_total,
-          tasa_igv: d.tasa_igv,
-          tenant_id: d.tenant_id,
-          venta_id: d.venta_id,
-        })),
-      };
-    });
+    // Devolver estructura REAL sin campos fantasma
+    // Frontend debe usar cuenta_por_cobrar para estado de pago en ventas a crédito
+    const result = ventas.map((v) => ({
+      id: v.id,
+      total: v.total,
+      metodo_pago: v.metodo_pago,
+      condicion_pago: v.condicion_pago,
+      created_at: v.created_at,
+      tenant_id: v.tenant_id,
+      cliente_id: v.cliente_id,
+      cliente: v.cliente,
+      usuario_id: v.usuario_id,
+      usuario: v.usuario,
+      pedido_origen_id: v.pedido_origen_id,
+      sesion_caja_id: v.sesion_caja_id,
+      serie_id: v.serie_id,
+      serie: v.serie,
+      numero_comprobante: v.numero_comprobante,
+      estado_sunat: v.estado_sunat,
+      xml_url: v.xml_url,
+      cdr_url: v.cdr_url,
+      hash_cpe: v.hash_cpe,
+      codigo_qr: v.codigo_qr,
+      // Relación real para créditos - frontend usa esto para estado de pago
+      cuenta_por_cobrar: v.CuentasPorCobrar ? {
+        id: v.CuentasPorCobrar.id,
+        estado: v.CuentasPorCobrar.estado,
+        saldo_pendiente: Number(v.CuentasPorCobrar.saldo_pendiente),
+        monto_pagado: Number(v.CuentasPorCobrar.monto_pagado),
+        monto_total: Number(v.CuentasPorCobrar.monto_total),
+        fecha_vencimiento: v.CuentasPorCobrar.fecha_vencimiento,
+      } : null,
+      detalles: v.VentaDetalles.map((d) => ({
+        id: d.id,
+        producto_id: d.producto_id,
+        producto: d.producto,
+        cantidad: d.cantidad,
+        valor_unitario: d.valor_unitario,
+        precio_unitario: d.precio_unitario,
+        igv_total: d.igv_total,
+        tasa_igv: d.tasa_igv,
+        tenant_id: d.tenant_id,
+        venta_id: d.venta_id,
+      })),
+    }));
 
     res.status(200).json({
       data: result,
@@ -117,6 +93,7 @@ export const getVentasHandler = asyncHandler(
     });
   }
 );
+
 
 /**
  * GET /api/ventas/:id — Obtiene el detalle de una venta específica
@@ -146,18 +123,12 @@ export const getVentaByIdHandler = asyncHandler(
       venta_id: d.venta_id,
     }));
 
-    // Derivar datos de pago desde CuentasPorCobrar
-    const datosPago = derivarDatosPago(venta);
-
-    // Devolver objeto completo según VentaResponseSchema
+    // Devolver estructura REAL - frontend usa cuenta_por_cobrar para estado de pago
     res.status(200).json({
       id: venta.id,
       total: venta.total,
       metodo_pago: venta.metodo_pago,
       condicion_pago: venta.condicion_pago,
-      estado_pago: datosPago.estado_pago,
-      fecha_vencimiento: datosPago.fecha_vencimiento,
-      saldo_pendiente: datosPago.saldo_pendiente,
       created_at: venta.created_at,
       tenant_id: venta.tenant_id,
       cliente_id: venta.cliente_id,
@@ -173,6 +144,14 @@ export const getVentaByIdHandler = asyncHandler(
       cdr_url: venta.cdr_url,
       hash_cpe: venta.hash_cpe,
       codigo_qr: venta.codigo_qr,
+      cuenta_por_cobrar: venta.CuentasPorCobrar ? {
+        id: venta.CuentasPorCobrar.id,
+        estado: venta.CuentasPorCobrar.estado,
+        saldo_pendiente: Number(venta.CuentasPorCobrar.saldo_pendiente),
+        monto_pagado: Number(venta.CuentasPorCobrar.monto_pagado),
+        monto_total: Number(venta.CuentasPorCobrar.monto_total),
+        fecha_vencimiento: venta.CuentasPorCobrar.fecha_vencimiento,
+      } : null,
       detalles,
     });
   }
@@ -221,18 +200,12 @@ export const createVentaHandler = asyncHandler(
         );
       }
 
-      // Derivar datos de pago desde CuentasPorCobrar
-      const datosPago = derivarDatosPago(ventaCompleta);
-
-      // Devolver objeto completo según VentaResponseSchema con campos SUNAT
+      // Devolver estructura REAL con campos SUNAT
       res.status(201).json({
         id: ventaCompleta!.id,
         total: ventaCompleta!.total,
         metodo_pago: ventaCompleta!.metodo_pago,
         condicion_pago: ventaCompleta!.condicion_pago,
-        estado_pago: datosPago.estado_pago,
-        fecha_vencimiento: datosPago.fecha_vencimiento,
-        saldo_pendiente: datosPago.saldo_pendiente,
         created_at: ventaCompleta!.created_at,
         tenant_id: ventaCompleta!.tenant_id,
         cliente_id: ventaCompleta!.cliente_id,
@@ -249,6 +222,14 @@ export const createVentaHandler = asyncHandler(
         cdr_url: ventaCompleta!.cdr_url,
         hash_cpe: ventaCompleta!.hash_cpe,
         codigo_qr: ventaCompleta!.codigo_qr,
+        cuenta_por_cobrar: ventaCompleta!.CuentasPorCobrar ? {
+          id: ventaCompleta!.CuentasPorCobrar.id,
+          estado: ventaCompleta!.CuentasPorCobrar.estado,
+          saldo_pendiente: Number(ventaCompleta!.CuentasPorCobrar.saldo_pendiente),
+          monto_pagado: Number(ventaCompleta!.CuentasPorCobrar.monto_pagado),
+          monto_total: Number(ventaCompleta!.CuentasPorCobrar.monto_total),
+          fecha_vencimiento: ventaCompleta!.CuentasPorCobrar.fecha_vencimiento,
+        } : null,
         detalles: ventaCompleta!.VentaDetalles.map((d) => ({
           id: d.id,
           producto_id: d.producto_id,

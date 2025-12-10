@@ -50,6 +50,7 @@ export type CreatePagoDTO = z.infer<typeof CreatePagoSchema>;
 
 /**
  * Schema de respuesta para un Pago
+ * Incluye cuenta_por_cobrar con venta y cliente para contexto completo
  */
 export const PagoResponseSchema = registry.register(
   'Pago',
@@ -58,26 +59,47 @@ export const PagoResponseSchema = registry.register(
     monto: z.number().openapi({ example: 150.50 }),
     metodo_pago: MetodoPagoEnum.openapi({ example: 'EFECTIVO' }),
     referencia: z.string().nullable().openapi({ example: 'OP-12345678' }),
-    fecha_pago: z.string().datetime().openapi({ 
+    fecha_pago: z.string().datetime().openapi({
       description: 'Fecha y hora del registro del pago',
-      example: '2024-01-15T10:30:00.000Z' 
+      example: '2024-01-15T10:30:00.000Z'
     }),
     notas: z.string().nullable().openapi({ example: 'Pago parcial' }),
     tenant_id: z.number().int().openapi({ example: 1 }),
-    cuenta_id: z.number().int().openapi({ 
+    cuenta_id: z.number().int().openapi({
       description: 'ID de la Cuenta por Cobrar asociada',
-      example: 10 
+      example: 10
     }),
-    usuario_id: z.number().int().nullable().openapi({ 
+    usuario_id: z.number().int().nullable().openapi({
       description: 'ID del usuario que registró el pago',
-      example: 5 
+      example: 5
     }),
     usuario: z.object({
       id: z.number().int(),
-      nombre: z.string(),
-      email: z.string().email(),
+      nombre: z.string().nullable(),
+      email: z.string(),
     }).nullable().optional().openapi({
       description: 'Datos del usuario que registró el pago',
+    }),
+    // Relación con cuenta por cobrar (incluida en getPagosPaginados)
+    cuenta_por_cobrar: z.object({
+      id: z.number().int(),
+      monto_total: z.number(),
+      saldo_pendiente: z.number(),
+      estado: z.enum(['VIGENTE', 'POR_VENCER', 'VENCIDA', 'PAGADA', 'CANCELADA']),
+      venta: z.object({
+        id: z.number().int(),
+        numero_comprobante: z.number().int().nullable(),
+        serie: z.object({
+          codigo: z.string(),
+          tipo_comprobante: z.string(),
+        }).nullable().optional(),
+        cliente: z.object({
+          nombre: z.string(),
+          razon_social: z.string().nullable(),
+        }).nullable().optional(),
+      }).optional(),
+    }).optional().openapi({
+      description: 'Datos de la cuenta por cobrar asociada (solo en listados paginados)',
     }),
   })
 );

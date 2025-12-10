@@ -148,27 +148,19 @@ class MovimientoCajaModel {
 
   /**
    * Mapear movimiento de Prisma a DTO
+   * Devuelve las FKs exactamente como están en la BD (sin derivación)
    */
   private mapMovimientoToDTO(movimiento: any): MovimientoCajaResponseDTO {
-    // Derivar referencia_tipo para compatibilidad con API existente
-    let referenciaTipo: string | undefined;
-    if (movimiento.venta_id) referenciaTipo = 'VENTA';
-    else if (movimiento.nota_credito_id) referenciaTipo = 'NOTA_CREDITO';
-    else if (movimiento.pago_id) referenciaTipo = 'PAGO';
-    else if (movimiento.es_manual) referenciaTipo = 'MANUAL';
-
-    const referenciaId = movimiento.venta_id?.toString()
-      || movimiento.nota_credito_id?.toString()
-      || movimiento.pago_id?.toString()
-      || undefined;
-
     return {
       id: movimiento.id,
       tipo: movimiento.tipo,
       monto: Number(movimiento.monto),
       descripcion: movimiento.descripcion,
-      referencia_tipo: referenciaTipo,
-      referencia_id: referenciaId,
+      // FKs explícitas - estructura real de la BD
+      venta_id: movimiento.venta_id,
+      nota_credito_id: movimiento.nota_credito_id,
+      pago_id: movimiento.pago_id,
+      es_manual: movimiento.es_manual,
       fecha: movimiento.fecha,
       sesion_caja_id: movimiento.sesion_caja_id,
       sesion_caja: movimiento.sesion_caja,

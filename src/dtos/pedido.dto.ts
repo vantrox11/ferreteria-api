@@ -104,12 +104,13 @@ export type GenerarVentaDTO = z.infer<typeof GenerarVentaSchema>;
 
 /**
  * Schema para detalle de pedido en respuesta (PedidoDetalles)
+ * Incluye stock actual del producto para validación de disponibilidad
  */
 const DetallePedidoResponseSchema = z.object({
   id: z.number().int().openapi({ example: 1 }),
-  cantidad: z.number().openapi({ 
+  cantidad: z.number().openapi({
     description: 'Cantidad solicitada (soporta decimales)',
-    example: 3 
+    example: 3
   }),
   tenant_id: z.number().int().openapi({ example: 1 }),
   pedido_id: z.number().int().openapi({ example: 1 }),
@@ -119,7 +120,7 @@ const DetallePedidoResponseSchema = z.object({
     nombre: z.string(),
     sku: z.string().nullable(),
     precio_base: z.number(),
-    afectacion_igv: z.enum(['GRAVADO', 'EXONERADO', 'INAFECTO']),
+    stock: z.number().openapi({ description: 'Stock actual disponible', example: 50 }),
   }).optional(),
 });
 
@@ -146,9 +147,9 @@ export const PedidoResponseSchema = registry.register(
       example: 'tienda',
     }),
     tenant_id: z.number().int().openapi({ example: 1 }),
-    cliente_id: z.number().int().nullable().openapi({ 
+    cliente_id: z.number().int().nullable().openapi({
       description: 'ID del cliente (opcional)',
-      example: 1 
+      example: 1
     }),
     cliente: z.object({
       id: z.number().int(),
@@ -158,7 +159,7 @@ export const PedidoResponseSchema = registry.register(
     }).nullable().optional(),
     usuario_gestion_id: z.number().int().nullable().openapi({
       description: 'ID del usuario que gestionó el pedido',
-      example: 1 
+      example: 1
     }),
     usuario_gestion: z.object({
       id: z.number().int(),

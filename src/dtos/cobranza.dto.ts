@@ -1,85 +1,56 @@
 import { z } from 'zod';
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { registry, createPaginatedResponseSchema, PaginationQuerySchema } from '../config/openapi-registry';
-import { montoDecimalSchema } from './common.dto';
 
 extendZodWithOpenApi(z);
 
 /**
- * DTO para registrar un pago (amortización de deuda)
- */
-export const CreatePagoSchema = registry.register(
-  'CreatePago',
-  z.object({
-    monto: z.number().positive('El monto debe ser mayor a 0').openapi({
-      description: 'Monto del pago a registrar',
-      example: 250.00,
-    }),
-    metodo_pago: z.enum(['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'YAPE', 'PLIN', 'DEPOSITO', 'CHEQUE']).openapi({
-      description: 'Método de pago utilizado',
-      example: 'EFECTIVO',
-    }),
-    referencia: z.string().max(255).optional().openapi({
-      description: 'Número de operación, voucher u otro comprobante (opcional)',
-      example: 'OP-123456789',
-    }),
-    notas: z.string().max(500).optional().openapi({
-      description: 'Observaciones adicionales del pago',
-      example: 'Pago parcial acordado con el cliente',
-    }),
-  })
-);
-export type CreatePagoDTO = z.infer<typeof CreatePagoSchema>;
-
-/**
  * Schema de respuesta para un pago individual
+ * Incluido en CuentaPorCobrar.pagos[]
  */
-export const PagoResponseSchema = registry.register(
-  'Pago',
-  z.object({
-    id: z.number().int().openapi({
-      description: 'ID único del pago',
-      example: 1,
-    }),
-    monto: z.number().openapi({
-      description: 'Monto pagado',
-      example: 250.00,
-    }),
-    metodo_pago: z.string().openapi({
-      description: 'Método de pago',
-      example: 'EFECTIVO',
-    }),
-    referencia: z.string().nullable().openapi({
-      description: 'Número de operación o referencia',
-      example: 'OP-123456789',
-    }),
-    fecha_pago: z.string().datetime().openapi({
-      description: 'Fecha y hora del pago',
-      example: '2025-11-30T10:00:00Z',
-    }),
-    notas: z.string().nullable().openapi({
-      description: 'Observaciones del pago',
-      example: 'Pago parcial acordado',
-    }),
-    tenant_id: z.number().int().openapi({ example: 1 }),
-    cuenta_id: z.number().int().openapi({
-      description: 'ID de la cuenta por cobrar asociada',
-      example: 1,
-    }),
-    usuario_id: z.number().int().nullable().openapi({
-      description: 'ID del usuario que registró el pago',
-      example: 1,
-    }),
-    usuario: z.object({
-      id: z.number().int(),
-      nombre: z.string().nullable(),
-      email: z.string(),
-    }).nullable().optional().openapi({
-      description: 'Datos del usuario que registró el pago',
-    }),
-  })
-);
-export type PagoResponseDTO = z.infer<typeof PagoResponseSchema>;
+const PagoEmbeddedSchema = z.object({
+  id: z.number().int().openapi({
+    description: 'ID único del pago',
+    example: 1,
+  }),
+  monto: z.number().openapi({
+    description: 'Monto pagado',
+    example: 250.00,
+  }),
+  metodo_pago: z.string().openapi({
+    description: 'Método de pago',
+    example: 'EFECTIVO',
+  }),
+  referencia: z.string().nullable().openapi({
+    description: 'Número de operación o referencia',
+    example: 'OP-123456789',
+  }),
+  fecha_pago: z.string().datetime().openapi({
+    description: 'Fecha y hora del pago',
+    example: '2025-11-30T10:00:00Z',
+  }),
+  notas: z.string().nullable().openapi({
+    description: 'Observaciones del pago',
+    example: 'Pago parcial acordado',
+  }),
+  tenant_id: z.number().int().openapi({ example: 1 }),
+  cuenta_id: z.number().int().openapi({
+    description: 'ID de la cuenta por cobrar asociada',
+    example: 1,
+  }),
+  usuario_id: z.number().int().nullable().openapi({
+    description: 'ID del usuario que registró el pago',
+    example: 1,
+  }),
+  usuario: z.object({
+    id: z.number().int(),
+    nombre: z.string().nullable(),
+    email: z.string(),
+  }).nullable().optional().openapi({
+    description: 'Datos del usuario que registró el pago',
+  }),
+});
+export type PagoResponseDTO = z.infer<typeof PagoEmbeddedSchema>;
 
 /**
  * Schema de respuesta para cuenta por cobrar
@@ -154,7 +125,7 @@ export const CuentaPorCobrarResponseSchema = registry.register(
     }).optional().openapi({
       description: 'Datos del cliente deudor',
     }),
-    pagos: z.array(PagoResponseSchema).optional().openapi({
+    pagos: z.array(PagoEmbeddedSchema).optional().openapi({
       description: 'Historial de pagos realizados',
     }),
   })

@@ -38,6 +38,33 @@ export const CreateInventarioAjusteSchema = registry.register(
 export type CreateInventarioAjusteDTO = z.infer<typeof CreateInventarioAjusteSchema>;
 
 /**
+ * Schema para relación Producto en ajuste de inventario
+ */
+const ProductoAjusteRelacionSchema = z.object({
+  id: z.number().int().openapi({ example: 1 }),
+  nombre: z.string().openapi({ example: 'Martillo Stanley' }),
+  sku: z.string().nullable().openapi({ example: 'MAR-ST-16' }),
+  stock_actual: z.number().openapi({ example: 100.5 }),
+}).nullable().openapi({
+  description: 'Información del producto ajustado',
+});
+
+/**
+ * Schema para relación Usuario en ajuste de inventario
+ */
+const UsuarioAjusteRelacionSchema = z.object({
+  id: z.number().int().openapi({ example: 1 }),
+  nombre: z.string().openapi({ example: 'Juan Pérez' }),
+}).nullable().openapi({
+  description: 'Usuario que realizó el ajuste',
+});
+
+/**
+ * Enum para tipo de movimiento de inventario
+ */
+export const TipoMovimientoEnum = z.enum(['ENTRADA_AJUSTE', 'SALIDA_AJUSTE']);
+
+/**
  * DTO de respuesta para ajuste de inventario
  */
 export const InventarioAjusteResponseSchema = registry.register(
@@ -47,11 +74,9 @@ export const InventarioAjusteResponseSchema = registry.register(
       description: 'ID único del ajuste',
       example: 1,
     }),
-    producto_id: z.number().int().openapi({
-      example: 1,
-    }),
-    tipo: TipoAjusteEnum.openapi({
-      example: 'entrada',
+    tipo_movimiento: TipoMovimientoEnum.openapi({
+      description: 'Tipo de movimiento: ENTRADA_AJUSTE o SALIDA_AJUSTE',
+      example: 'ENTRADA_AJUSTE',
     }),
     cantidad: z.number().openapi({
       example: 10.5,
@@ -59,28 +84,16 @@ export const InventarioAjusteResponseSchema = registry.register(
     motivo: z.string().nullable().openapi({
       example: 'Corrección de inventario físico',
     }),
-    saldo_anterior: z.number().optional().openapi({
-      description: 'Saldo antes del movimiento (Kardex)',
-      example: 50,
-    }),
-    saldo_nuevo: z.number().optional().openapi({
-      description: 'Saldo después del movimiento (Kardex)',
-      example: 60.5,
-    }),
-    usuario_id: z.number().int().nullable().openapi({
-      description: 'ID del usuario que realizó el ajuste',
-      example: 1,
-    }),
-    tenant_id: z.number().int().optional().openapi({
-      example: 1,
-    }),
     created_at: z.string().datetime().openapi({
       description: 'Fecha de creación del ajuste',
       example: '2025-11-16T10:30:00Z',
     }),
+    producto: ProductoAjusteRelacionSchema,
+    usuario: UsuarioAjusteRelacionSchema,
   })
 );
 export type InventarioAjusteResponseDTO = z.infer<typeof InventarioAjusteResponseSchema>;
+
 
 /**
  * Query params para listar ajustes de inventario
@@ -92,9 +105,9 @@ export const ListInventarioAjustesQuerySchema = registry.register(
       description: 'Filtrar por ID de producto',
       example: 1,
     }),
-    tipo: TipoAjusteEnum.optional().openapi({
-      description: 'Filtrar por tipo de ajuste',
-      example: 'entrada',
+    tipo: TipoMovimientoEnum.optional().openapi({
+      description: 'Filtrar por tipo de movimiento',
+      example: 'ENTRADA_AJUSTE',
     }),
     fecha_inicio: z.string().datetime().optional().openapi({
       description: 'Fecha de inicio del rango (ISO 8601)',

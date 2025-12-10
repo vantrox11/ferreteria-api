@@ -40,14 +40,17 @@ export const findUsuarioByIdAndTenant = async (tenantId: number, id: number) => 
 /**
  * Busca un usuario por email dentro de un tenant específico
  */
+// src/services/usuarios.service.ts
+
 export const findUsuarioByEmailAndTenant = async (tenantId: number, email: string) => {
-  return db.usuarios.findUnique({
+  // Usamos findFirst explícito con campos planos.
+  // La extensión inyectará tenant_id automáticamente si está en contexto,
+  // pero como aquí lo pasamos explícito, es redundante pero seguro.
+  return db.usuarios.findFirst({
     where: {
-      tenant_id_email: {
-        tenant_id: tenantId,
-        email: email,
-      },
-    },
+      email: email,
+      tenant_id: tenantId
+    }
   });
 };
 

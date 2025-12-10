@@ -241,11 +241,12 @@ export const crearEntradaDevolucion = (
 // ============================================
 
 /**
- * DTO para crear ajuste de inventario (compatible con API existente)
+ * DTO para crear ajuste de inventario
+ * Usa el enum TipoMovimientoInventario directamente
  */
 export interface CreateInventarioAjusteDTO {
     producto_id: number;
-    tipo: 'entrada' | 'salida';
+    tipo_movimiento: 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE';
     cantidad: number;
     motivo: string;
 }
@@ -263,19 +264,17 @@ export const findInventarioAjustesPaginados = async (
         take: number;
         search?: string;
         producto_id?: number;
-        tipo?: 'entrada' | 'salida';
+        tipo_movimiento?: 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE';
         fecha_inicio?: Date;
         fecha_fin?: Date;
     }
 ) => {
-    const { skip, take, search, producto_id, tipo, fecha_inicio, fecha_fin } = params;
+    const { skip, take, search, producto_id, tipo_movimiento, fecha_inicio, fecha_fin } = params;
 
-    // Mapear tipo legacy a nuevo enum
-    const tiposMovimiento: TipoMovimientoInventario[] = tipo === 'entrada'
-        ? ['ENTRADA_AJUSTE']
-        : tipo === 'salida'
-            ? ['SALIDA_AJUSTE']
-            : ['ENTRADA_AJUSTE', 'SALIDA_AJUSTE'];
+    // Usar el tipo directamente o ambos si no se especifica
+    const tiposMovimiento: TipoMovimientoInventario[] = tipo_movimiento
+        ? [tipo_movimiento]
+        : ['ENTRADA_AJUSTE', 'SALIDA_AJUSTE'];
 
     // Construir condición de búsqueda
     const whereClause: Prisma.MovimientosInventarioWhereInput = {
@@ -309,16 +308,15 @@ export const findInventarioAjustesPaginados = async (
         }),
     ]);
 
-    // Mapear a formato compatible con API existente
+    // Devolver estructura real sin mapeo
     const mappedData = data.map(mov => ({
         id: mov.id,
-        tipo: mov.tipo_movimiento === 'ENTRADA_AJUSTE' ? 'entrada' : 'salida',
+        tipo_movimiento: mov.tipo_movimiento,
         cantidad: mov.cantidad,
         motivo: mov.motivo,
         created_at: mov.created_at,
         producto: mov.producto,
         usuario: mov.usuario,
-        // Campos adicionales del Kardex
         saldo_anterior: mov.saldo_anterior,
         saldo_nuevo: mov.saldo_nuevo,
     }));
@@ -347,10 +345,10 @@ export const findInventarioAjusteByIdAndTenant = async (
 
     if (!mov) return null;
 
-    // Mapear a formato compatible
+    // Devolver estructura real sin mapeo
     return {
         id: mov.id,
-        tipo: mov.tipo_movimiento === 'ENTRADA_AJUSTE' ? 'entrada' : 'salida',
+        tipo_movimiento: mov.tipo_movimiento,
         cantidad: mov.cantidad,
         motivo: mov.motivo,
         created_at: mov.created_at,
@@ -363,9 +361,6 @@ export const findInventarioAjusteByIdAndTenant = async (
 
 /**
  * Crea un nuevo ajuste de inventario usando el servicio centralizado (Kardex)
- * 
- * Esta función mantiene la API compatible con el frontend existente pero
- * internamente usa el sistema Kardex con bloqueo optimista.
  */
 export const createInventarioAjuste = async (
     data: CreateInventarioAjusteDTO,
@@ -373,15 +368,11 @@ export const createInventarioAjuste = async (
     usuarioId?: number
 ) => {
     return dbBase.$transaction(async (tx) => {
-        // Determinar tipo de movimiento
-        const tipoMovimiento: TipoMovimientoInventario =
-            data.tipo === 'entrada' ? 'ENTRADA_AJUSTE' : 'SALIDA_AJUSTE';
-
         // Usar función registrarMovimiento del mismo módulo
         const resultado = await registrarMovimiento(tx, {
             tenantId,
             productoId: data.producto_id,
-            tipo: tipoMovimiento,
+            tipo: data.tipo_movimiento,
             cantidad: Number(data.cantidad),
             ajusteManual: true,
             motivo: data.motivo,
@@ -393,10 +384,10 @@ export const createInventarioAjuste = async (
             where: { id: resultado.id },
         });
 
-        // Devolver en formato compatible con API existente
+        // Devolver estructura real
         return {
             id: movimiento!.id,
-            tipo: data.tipo,
+            tipo_movimiento: movimiento!.tipo_movimiento,
             cantidad: movimiento!.cantidad,
             motivo: movimiento!.motivo,
             created_at: movimiento!.created_at,

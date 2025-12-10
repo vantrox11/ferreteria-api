@@ -2,7 +2,8 @@ import { type Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { type RequestWithAuth } from '../middlewares/auth.middleware';
 import * as cobranzaModel from '../services/cobranzas.service';
-import { type CreatePagoDTO } from '../dtos/cobranza.dto';
+import * as pagosService from '../services/pagos.service'; // ✅ Servicio con trazabilidad de caja
+import { type CreatePagoDTO } from '../dtos/pago.dto';
 import { db } from '../config/db';
 
 /**
@@ -12,7 +13,7 @@ import { db } from '../config/db';
 export const getCobranzasHandler = asyncHandler(
   async (req: RequestWithAuth, res: Response) => {
     const tenantId = req.tenantId!;
-    
+
     // Extraer parámetros de paginación y filtros
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -21,11 +22,11 @@ export const getCobranzasHandler = asyncHandler(
     const estado = req.query.estado as any;
     const fecha_inicio = req.query.fecha_inicio ? new Date(req.query.fecha_inicio as string) : undefined;
     const fecha_fin = req.query.fecha_fin ? new Date(req.query.fecha_fin as string) : undefined;
-    
+
     // Validar límites razonables
     const validLimit = Math.min(Math.max(limit, 1), 100);
     const skip = (page - 1) * validLimit;
-    
+
     // Obtener cuentas por cobrar paginadas
     const { total, data } = await cobranzaModel.findCobranzasPaginadas(tenantId, {
       skip,
@@ -36,7 +37,7 @@ export const getCobranzasHandler = asyncHandler(
       fecha_inicio,
       fecha_fin,
     });
-    
+
     // Devolver datos con metadatos de paginación
     res.status(200).json({
       data,
@@ -58,14 +59,14 @@ export const getCuentaPorCobrarByIdHandler = asyncHandler(
   async (req: RequestWithAuth, res: Response) => {
     const tenantId = req.tenantId!;
     const { id } = req.params;
-    
+
     const cuenta = await cobranzaModel.findCuentaPorCobrarById(tenantId, Number(id));
-    
+
     if (!cuenta) {
       res.status(404).json({ message: 'Cuenta por cobrar no encontrada.' });
       return;
     }
-    
+
     res.status(200).json(cuenta);
   }
 );
@@ -73,28 +74,39 @@ export const getCuentaPorCobrarByIdHandler = asyncHandler(
 /**
  * Registrar un pago (amortización) en una cuenta por cobrar
  * POST /api/cobranzas/:id/pagos
+ * 
+ * ✅ USA pagos.service.ts que tiene trazabilidad completa de MovimientosCaja
  */
 export const registrarPagoHandler = asyncHandler(
   async (req: RequestWithAuth, res: Response) => {
     const tenantId = req.tenantId!;
     const usuarioId = req.user!.id;
     const { id } = req.params;
-    const pagoData: CreatePagoDTO = req.body;
-    
+    const pagoData = req.body;
+
     try {
-      const pago = await cobranzaModel.registrarPago(
+      // ✅ Usar pagosService que SÍ registra MovimientoCaja
+      const pago = await pagosService.registrarPago(
         tenantId,
         Number(id),
         pagoData,
         usuarioId
       );
-      
+
       res.status(201).json({
         message: 'Pago registrado exitosamente',
         pago,
       });
     } catch (error: any) {
-      if (error?.code === 'MONTO_EXCEDE_DEUDA') {
+      if (error?.code === 'MONTO_EXCEDE_DEUDA' || error?.code === 'MONTO_EXCEDE_SALDO') {
+        res.status(400).json({ message: error.message });
+        return;
+      }
+      if (error?.code === 'CUENTA_NOT_FOUND') {
+        res.status(404).json({ message: error.message });
+        return;
+      }
+      if (error?.code === 'CUENTA_CANCELADA' || error?.code === 'MONTO_INVALIDO') {
         res.status(400).json({ message: error.message });
         return;
       }
@@ -110,9 +122,9 @@ export const registrarPagoHandler = asyncHandler(
 export const getResumenCobranzasHandler = asyncHandler(
   async (req: RequestWithAuth, res: Response) => {
     const tenantId = req.tenantId!;
-    
+
     const resumen = await cobranzaModel.getResumenCobranzas(tenantId);
-    
+
     res.status(200).json(resumen);
   }
 );
@@ -126,14 +138,14 @@ export const updateCuentaPorCobrarHandler = asyncHandler(
     const tenantId = req.tenantId!;
     const { id } = req.params;
     const { notas } = req.body;
-    
+
     try {
       const cuentaActualizada = await cobranzaModel.updateCuentaPorCobrarNotas(
         tenantId,
         Number(id),
         notas
       );
-      
+
       res.status(200).json({
         message: 'Cuenta por cobrar actualizada',
         cuenta: cuentaActualizada,
@@ -156,7 +168,7 @@ export const getCreditoDisponibleHandler = asyncHandler(
   async (req: RequestWithAuth, res: Response) => {
     const tenantId = req.tenantId!;
     const { clienteId } = req.params;
-    
+
     // Obtener datos del cliente
     const cliente = await db.clientes.findFirst({
       where: {
@@ -170,14 +182,14 @@ export const getCreditoDisponibleHandler = asyncHandler(
         dias_credito: true,
       },
     });
-    
+
     console.log('💳 [CREDITO DISPONIBLE] Cliente obtenido de BD:', JSON.stringify(cliente, null, 2));
-    
+
     if (!cliente) {
       res.status(404).json({ message: 'Cliente no encontrado' });
       return;
     }
-    
+
     // Calcular deuda actual
     const deudaActual = await db.cuentasPorCobrar.aggregate({
       where: {
@@ -191,11 +203,11 @@ export const getCreditoDisponibleHandler = asyncHandler(
         saldo_pendiente: true,
       },
     });
-    
+
     const saldoPendiente = Number(deudaActual._sum.saldo_pendiente || 0);
     const limiteCredito = Number(cliente.limite_credito);
     const creditoDisponible = limiteCredito - saldoPendiente;
-    
+
     res.status(200).json({
       cliente: {
         id: cliente.id,

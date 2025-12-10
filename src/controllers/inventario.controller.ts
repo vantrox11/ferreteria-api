@@ -25,7 +25,7 @@ export const getInventarioAjustesHandler = asyncHandler(
       take: validLimit,
       search: search.trim() || undefined,
       producto_id: req.query.producto_id ? Number(req.query.producto_id) : undefined,
-      tipo: req.query.tipo as 'entrada' | 'salida' | undefined,
+      tipo_movimiento: req.query.tipo_movimiento as 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE' | undefined,
       fecha_inicio: req.query.fecha_inicio ? new Date(req.query.fecha_inicio as string) : undefined,
       fecha_fin: req.query.fecha_fin ? new Date(req.query.fecha_fin as string) : undefined,
     };
@@ -34,7 +34,7 @@ export const getInventarioAjustesHandler = asyncHandler(
 
     const result = ajustes.map((a) => ({
       id: a.id,
-      tipo: a.tipo,
+      tipo_movimiento: a.tipo_movimiento,
       cantidad: a.cantidad,
       motivo: a.motivo,
       created_at: a.created_at,
@@ -85,7 +85,7 @@ export const getInventarioAjusteByIdHandler = asyncHandler(
 
     res.status(200).json({
       id: ajuste.id,
-      tipo: ajuste.tipo,
+      tipo_movimiento: ajuste.tipo_movimiento,
       cantidad: ajuste.cantidad,
       motivo: ajuste.motivo,
       created_at: ajuste.created_at,
@@ -125,7 +125,7 @@ export const createInventarioAjusteHandler = asyncHandler(
       );
       res.status(201).json({
         id: nuevoAjuste.id,
-        tipo: nuevoAjuste.tipo,
+        tipo_movimiento: nuevoAjuste.tipo_movimiento,
         cantidad: nuevoAjuste.cantidad,
         motivo: nuevoAjuste.motivo,
         created_at: nuevoAjuste.created_at,

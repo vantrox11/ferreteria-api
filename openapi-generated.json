@@ -883,9 +883,61 @@
             ],
             "example": 3
           },
+          "marca": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 3
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Stanley"
+              }
+            },
+            "required": [
+              "id",
+              "nombre"
+            ],
+            "description": "Marca del producto"
+          },
           "unidad_medida_id": {
             "type": "integer",
             "example": 1
+          },
+          "unidad_medida": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 1
+              },
+              "codigo": {
+                "type": "string",
+                "example": "NIU"
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Unidad"
+              },
+              "permite_decimales": {
+                "type": "boolean",
+                "example": false
+              }
+            },
+            "required": [
+              "id",
+              "codigo",
+              "nombre",
+              "permite_decimales"
+            ],
+            "description": "Unidad de medida del producto"
           },
           "categoria_id": {
             "type": [
@@ -893,6 +945,27 @@
               "null"
             ],
             "example": 5
+          },
+          "categoria": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 5
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Herramientas Manuales"
+              }
+            },
+            "required": [
+              "id",
+              "nombre"
+            ],
+            "description": "Categoría del producto"
           },
           "isActive": {
             "type": "boolean",
@@ -1925,17 +1998,14 @@
             "description": "ID único del ajuste",
             "example": 1
           },
-          "producto_id": {
-            "type": "integer",
-            "example": 1
-          },
-          "tipo": {
+          "tipo_movimiento": {
             "type": "string",
             "enum": [
-              "entrada",
-              "salida"
+              "ENTRADA_AJUSTE",
+              "SALIDA_AJUSTE"
             ],
-            "example": "entrada"
+            "description": "Tipo de movimiento: ENTRADA_AJUSTE o SALIDA_AJUSTE",
+            "example": "ENTRADA_AJUSTE"
           },
           "cantidad": {
             "type": "number",
@@ -1948,43 +2018,76 @@
             ],
             "example": "Corrección de inventario físico"
           },
-          "saldo_anterior": {
-            "type": "number",
-            "description": "Saldo antes del movimiento (Kardex)",
-            "example": 50
-          },
-          "saldo_nuevo": {
-            "type": "number",
-            "description": "Saldo después del movimiento (Kardex)",
-            "example": 60.5
-          },
-          "usuario_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "description": "ID del usuario que realizó el ajuste",
-            "example": 1
-          },
-          "tenant_id": {
-            "type": "integer",
-            "example": 1
-          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Fecha de creación del ajuste",
             "example": "2025-11-16T10:30:00Z"
+          },
+          "producto": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 1
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Martillo Stanley"
+              },
+              "sku": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "example": "MAR-ST-16"
+              },
+              "stock_actual": {
+                "type": "number",
+                "example": 100.5
+              }
+            },
+            "required": [
+              "id",
+              "nombre",
+              "sku",
+              "stock_actual"
+            ],
+            "description": "Información del producto ajustado"
+          },
+          "usuario": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 1
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Juan Pérez"
+              }
+            },
+            "required": [
+              "id",
+              "nombre"
+            ],
+            "description": "Usuario que realizó el ajuste"
           }
         },
         "required": [
           "id",
-          "producto_id",
-          "tipo",
+          "tipo_movimiento",
           "cantidad",
           "motivo",
-          "usuario_id",
-          "created_at"
+          "created_at",
+          "producto",
+          "usuario"
         ]
       },
       "ListInventarioAjustesQuery": {
@@ -1999,11 +2102,11 @@
           "tipo": {
             "type": "string",
             "enum": [
-              "entrada",
-              "salida"
+              "ENTRADA_AJUSTE",
+              "SALIDA_AJUSTE"
             ],
-            "description": "Filtrar por tipo de ajuste",
-            "example": "entrada"
+            "description": "Filtrar por tipo de movimiento",
+            "example": "ENTRADA_AJUSTE"
           },
           "fecha_inicio": {
             "type": "string",
@@ -2442,30 +2545,6 @@
             "description": "Condición de pago",
             "example": "CONTADO"
           },
-          "estado_pago": {
-            "type": "string",
-            "enum": [
-              "PENDIENTE",
-              "PARCIAL",
-              "PAGADO"
-            ],
-            "description": "Estado del pago",
-            "example": "PAGADO"
-          },
-          "fecha_vencimiento": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time",
-            "description": "Fecha de vencimiento (solo para crédito)",
-            "example": "2025-12-16T14:30:00Z"
-          },
-          "saldo_pendiente": {
-            "type": "number",
-            "description": "Saldo pendiente de pago",
-            "example": 0
-          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -2496,6 +2575,18 @@
                 "type": "string"
               },
               "documento_identidad": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ruc": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "razon_social": {
                 "type": [
                   "string",
                   "null"
@@ -2649,6 +2740,63 @@
             "description": "Código QR del comprobante (URL o texto)",
             "example": "https://qr.sunat.gob.pe/..."
           },
+          "cuenta_por_cobrar": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 1
+              },
+              "estado": {
+                "type": "string",
+                "enum": [
+                  "VIGENTE",
+                  "POR_VENCER",
+                  "VENCIDA",
+                  "PAGADA",
+                  "CANCELADA"
+                ],
+                "description": "Estado de la cuenta por cobrar",
+                "example": "VIGENTE"
+              },
+              "saldo_pendiente": {
+                "type": "number",
+                "description": "Saldo pendiente de pago",
+                "example": 500
+              },
+              "monto_pagado": {
+                "type": "number",
+                "description": "Monto pagado hasta el momento",
+                "example": 0
+              },
+              "monto_total": {
+                "type": "number",
+                "description": "Monto total de la cuenta",
+                "example": 500
+              },
+              "fecha_vencimiento": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Fecha de vencimiento",
+                "example": "2025-12-16T14:30:00Z"
+              }
+            },
+            "required": [
+              "id",
+              "estado",
+              "saldo_pendiente",
+              "monto_pagado",
+              "monto_total",
+              "fecha_vencimiento"
+            ],
+            "description": "Cuenta por cobrar asociada (solo para ventas a CREDITO). Contiene estado de pago, saldo y vencimiento."
+          },
           "detalles": {
             "type": "array",
             "items": {
@@ -2756,9 +2904,6 @@
           "total",
           "metodo_pago",
           "condicion_pago",
-          "estado_pago",
-          "fecha_vencimiento",
-          "saldo_pendiente",
           "created_at",
           "tenant_id",
           "cliente_id",
@@ -2771,7 +2916,8 @@
           "xml_url",
           "cdr_url",
           "hash_cpe",
-          "codigo_qr"
+          "codigo_qr",
+          "cuenta_por_cobrar"
         ]
       },
       "ListVentasQuery": {
@@ -3212,12 +3358,18 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "stock": {
+                      "type": "number",
+                      "description": "Stock actual del producto",
+                      "example": 100
                     }
                   },
                   "required": [
                     "id",
                     "nombre",
-                    "sku"
+                    "sku",
+                    "stock"
                   ]
                 }
               },
@@ -3551,13 +3703,10 @@
                     "precio_base": {
                       "type": "number"
                     },
-                    "afectacion_igv": {
-                      "type": "string",
-                      "enum": [
-                        "GRAVADO",
-                        "EXONERADO",
-                        "INAFECTO"
-                      ]
+                    "stock": {
+                      "type": "number",
+                      "description": "Stock actual disponible",
+                      "example": 50
                     }
                   },
                   "required": [
@@ -3565,7 +3714,7 @@
                     "nombre",
                     "sku",
                     "precio_base",
-                    "afectacion_igv"
+                    "stock"
                   ]
                 }
               },
@@ -4133,24 +4282,31 @@
                   "format": "date-time",
                   "example": "2025-12-07T10:00:00Z"
                 },
-                "referencia_tipo": {
+                "venta_id": {
                   "type": [
-                    "string",
+                    "integer",
                     "null"
                   ],
-                  "example": "VENTA"
+                  "example": 123
                 },
-                "referencia_id": {
+                "nota_credito_id": {
                   "type": [
-                    "string",
+                    "integer",
                     "null"
                   ],
-                  "example": "123"
+                  "example": null
                 },
-                "es_automatico": {
+                "pago_id": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "example": null
+                },
+                "es_manual": {
                   "type": "boolean",
-                  "description": "Indica si fue generado automáticamente",
-                  "example": true
+                  "description": "Indica si es un movimiento manual",
+                  "example": false
                 }
               },
               "required": [
@@ -4159,9 +4315,10 @@
                 "descripcion",
                 "monto",
                 "fecha_hora",
-                "referencia_tipo",
-                "referencia_id",
-                "es_automatico"
+                "venta_id",
+                "nota_credito_id",
+                "pago_id",
+                "es_manual"
               ]
             },
             "description": "Línea de tiempo unificada"
@@ -4437,21 +4594,34 @@
             "description": "Descripción detallada del movimiento",
             "example": "Devolución efectivo NC B001-123 - FERRETERÍA LÓPEZ SAC"
           },
-          "referencia_tipo": {
+          "venta_id": {
             "type": [
-              "string",
+              "integer",
               "null"
             ],
-            "description": "Tipo de documento referenciado",
-            "example": "NOTA_CREDITO"
+            "description": "ID de la venta asociada (si aplica)",
+            "example": 123
           },
-          "referencia_id": {
+          "nota_credito_id": {
             "type": [
-              "string",
+              "integer",
               "null"
             ],
-            "description": "ID del documento referenciado",
-            "example": "123"
+            "description": "ID de la nota de crédito asociada (si aplica)",
+            "example": null
+          },
+          "pago_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "ID del pago asociado (si aplica)",
+            "example": null
+          },
+          "es_manual": {
+            "type": "boolean",
+            "description": "Indica si es un movimiento manual (sin documento asociado)",
+            "example": false
           },
           "fecha": {
             "type": "string",
@@ -4497,6 +4667,10 @@
           "tipo",
           "monto",
           "descripcion",
+          "venta_id",
+          "nota_credito_id",
+          "pago_id",
+          "es_manual",
           "fecha",
           "sesion_caja_id",
           "tenant_id"
@@ -4772,9 +4946,36 @@
                   "es_agente_retencion",
                   "exonerado_regional"
                 ]
+              },
+              "empresa": {
+                "type": "object",
+                "properties": {
+                  "ruc": {
+                    "type": "string",
+                    "description": "RUC de la empresa",
+                    "example": "20123456789"
+                  },
+                  "direccion": {
+                    "type": "string",
+                    "description": "Dirección fiscal de la empresa",
+                    "example": "Av. Industrial 123, Lima"
+                  },
+                  "telefono": {
+                    "type": "string",
+                    "description": "Teléfono de la empresa",
+                    "example": "01-2345678"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email de contacto de la empresa",
+                    "example": "contacto@ferreteria.com"
+                  }
+                },
+                "description": "Datos de la empresa para comprobantes"
               }
             },
-            "description": "Configuración general del tenant (pedidos, emails, facturación)"
+            "description": "Configuración general del tenant (pedidos, emails, facturación, empresa)"
           },
           "created_at": {
             "type": "string",
@@ -5553,143 +5754,6 @@
           }
         }
       },
-      "CreatePago": {
-        "type": "object",
-        "properties": {
-          "monto": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Monto del pago a registrar",
-            "example": 250
-          },
-          "metodo_pago": {
-            "type": "string",
-            "enum": [
-              "EFECTIVO",
-              "TARJETA",
-              "TRANSFERENCIA",
-              "YAPE",
-              "PLIN",
-              "DEPOSITO",
-              "CHEQUE"
-            ],
-            "description": "Método de pago utilizado",
-            "example": "EFECTIVO"
-          },
-          "referencia": {
-            "type": "string",
-            "maxLength": 255,
-            "description": "Número de operación, voucher u otro comprobante (opcional)",
-            "example": "OP-123456789"
-          },
-          "notas": {
-            "type": "string",
-            "maxLength": 500,
-            "description": "Observaciones adicionales del pago",
-            "example": "Pago parcial acordado con el cliente"
-          }
-        },
-        "required": [
-          "monto",
-          "metodo_pago"
-        ]
-      },
-      "Pago": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "description": "ID único del pago",
-            "example": 1
-          },
-          "monto": {
-            "type": "number",
-            "description": "Monto pagado",
-            "example": 250
-          },
-          "metodo_pago": {
-            "type": "string",
-            "description": "Método de pago",
-            "example": "EFECTIVO"
-          },
-          "referencia": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Número de operación o referencia",
-            "example": "OP-123456789"
-          },
-          "fecha_pago": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Fecha y hora del pago",
-            "example": "2025-11-30T10:00:00Z"
-          },
-          "notas": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Observaciones del pago",
-            "example": "Pago parcial acordado"
-          },
-          "tenant_id": {
-            "type": "integer",
-            "example": 1
-          },
-          "cuenta_id": {
-            "type": "integer",
-            "description": "ID de la cuenta por cobrar asociada",
-            "example": 1
-          },
-          "usuario_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "description": "ID del usuario que registró el pago",
-            "example": 1
-          },
-          "usuario": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "properties": {
-              "id": {
-                "type": "integer"
-              },
-              "nombre": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "email": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "nombre",
-              "email"
-            ],
-            "description": "Datos del usuario que registró el pago"
-          }
-        },
-        "required": [
-          "id",
-          "monto",
-          "metodo_pago",
-          "referencia",
-          "fecha_pago",
-          "notas",
-          "tenant_id",
-          "cuenta_id",
-          "usuario_id"
-        ]
-      },
       "CuentaPorCobrar": {
         "type": "object",
         "properties": {
@@ -5860,7 +5924,100 @@
           "pagos": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Pago"
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "description": "ID único del pago",
+                  "example": 1
+                },
+                "monto": {
+                  "type": "number",
+                  "description": "Monto pagado",
+                  "example": 250
+                },
+                "metodo_pago": {
+                  "type": "string",
+                  "description": "Método de pago",
+                  "example": "EFECTIVO"
+                },
+                "referencia": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Número de operación o referencia",
+                  "example": "OP-123456789"
+                },
+                "fecha_pago": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Fecha y hora del pago",
+                  "example": "2025-11-30T10:00:00Z"
+                },
+                "notas": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Observaciones del pago",
+                  "example": "Pago parcial acordado"
+                },
+                "tenant_id": {
+                  "type": "integer",
+                  "example": 1
+                },
+                "cuenta_id": {
+                  "type": "integer",
+                  "description": "ID de la cuenta por cobrar asociada",
+                  "example": 1
+                },
+                "usuario_id": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "ID del usuario que registró el pago",
+                  "example": 1
+                },
+                "usuario": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "nombre": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "nombre",
+                    "email"
+                  ],
+                  "description": "Datos del usuario que registró el pago"
+                }
+              },
+              "required": [
+                "id",
+                "monto",
+                "metodo_pago",
+                "referencia",
+                "fecha_pago",
+                "notas",
+                "tenant_id",
+                "cuenta_id",
+                "usuario_id"
+              ]
             },
             "description": "Historial de pagos realizados"
           }
@@ -6023,6 +6180,297 @@
           "monto_vigente",
           "monto_vencido",
           "monto_por_vencer"
+        ]
+      },
+      "CreatePago": {
+        "type": "object",
+        "properties": {
+          "monto": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Monto del pago (máximo 2 decimales)",
+            "example": 150.5
+          },
+          "metodo_pago": {
+            "type": "string",
+            "enum": [
+              "EFECTIVO",
+              "TARJETA",
+              "TRANSFERENCIA",
+              "YAPE",
+              "PLIN",
+              "CHEQUE",
+              "OTROS"
+            ],
+            "description": "Método de pago utilizado",
+            "example": "EFECTIVO"
+          },
+          "referencia": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Número de operación, voucher, o referencia del pago",
+            "example": "OP-12345678"
+          },
+          "notas": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Notas adicionales sobre el pago",
+            "example": "Pago parcial - Cliente abonó primera cuota"
+          },
+          "sesion_caja_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "ID de la sesión de caja para registrar el ingreso automático (opcional)",
+            "example": 1
+          }
+        },
+        "required": [
+          "monto",
+          "metodo_pago"
+        ]
+      },
+      "Pago": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "monto": {
+            "type": "number",
+            "example": 150.5
+          },
+          "metodo_pago": {
+            "type": "string",
+            "enum": [
+              "EFECTIVO",
+              "TARJETA",
+              "TRANSFERENCIA",
+              "YAPE",
+              "PLIN",
+              "CHEQUE",
+              "OTROS"
+            ],
+            "example": "EFECTIVO"
+          },
+          "referencia": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "OP-12345678"
+          },
+          "fecha_pago": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha y hora del registro del pago",
+            "example": "2024-01-15T10:30:00.000Z"
+          },
+          "notas": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Pago parcial"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "cuenta_id": {
+            "type": "integer",
+            "description": "ID de la Cuenta por Cobrar asociada",
+            "example": 10
+          },
+          "usuario_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "ID del usuario que registró el pago",
+            "example": 5
+          },
+          "usuario": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "nombre": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "nombre",
+              "email"
+            ],
+            "description": "Datos del usuario que registró el pago"
+          },
+          "cuenta_por_cobrar": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "monto_total": {
+                "type": "number"
+              },
+              "saldo_pendiente": {
+                "type": "number"
+              },
+              "estado": {
+                "type": "string",
+                "enum": [
+                  "VIGENTE",
+                  "POR_VENCER",
+                  "VENCIDA",
+                  "PAGADA",
+                  "CANCELADA"
+                ]
+              },
+              "venta": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "numero_comprobante": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "serie": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "codigo": {
+                        "type": "string"
+                      },
+                      "tipo_comprobante": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "codigo",
+                      "tipo_comprobante"
+                    ]
+                  },
+                  "cliente": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "nombre": {
+                        "type": "string"
+                      },
+                      "razon_social": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "nombre",
+                      "razon_social"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "numero_comprobante"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "monto_total",
+              "saldo_pendiente",
+              "estado"
+            ],
+            "description": "Datos de la cuenta por cobrar asociada (solo en listados paginados)"
+          }
+        },
+        "required": [
+          "id",
+          "monto",
+          "metodo_pago",
+          "referencia",
+          "fecha_pago",
+          "notas",
+          "tenant_id",
+          "cuenta_id",
+          "usuario_id"
+        ]
+      },
+      "PaginatedPagos": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Pago"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Total de items",
+                "example": 150
+              },
+              "page": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "Página actual",
+                "example": 1
+              },
+              "limit": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "Items por página",
+                "example": 10
+              },
+              "totalPages": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Total de páginas",
+                "example": 15
+              }
+            },
+            "required": [
+              "total",
+              "page",
+              "limit",
+              "totalPages"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
         ]
       },
       "CreateNotaCredito": {
@@ -7133,146 +7581,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GuiaRemision"
-            }
-          },
-          "meta": {
-            "type": "object",
-            "properties": {
-              "total": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Total de items",
-                "example": 150
-              },
-              "page": {
-                "type": "integer",
-                "exclusiveMinimum": 0,
-                "description": "Página actual",
-                "example": 1
-              },
-              "limit": {
-                "type": "integer",
-                "exclusiveMinimum": 0,
-                "description": "Items por página",
-                "example": 10
-              },
-              "totalPages": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Total de páginas",
-                "example": 15
-              }
-            },
-            "required": [
-              "total",
-              "page",
-              "limit",
-              "totalPages"
-            ]
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ]
-      },
-      "PaginatedPagos": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Pago"
-                },
-                {
-                  "properties": {
-                    "id": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "monto": {
-                      "type": "number",
-                      "example": 150.5
-                    },
-                    "metodo_pago": {
-                      "type": "string",
-                      "enum": [
-                        "EFECTIVO",
-                        "TARJETA",
-                        "TRANSFERENCIA",
-                        "YAPE",
-                        "PLIN",
-                        "CHEQUE",
-                        "OTROS"
-                      ],
-                      "example": "EFECTIVO"
-                    },
-                    "referencia": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "example": "OP-12345678"
-                    },
-                    "fecha_pago": {
-                      "type": "string",
-                      "format": "date-time",
-                      "description": "Fecha y hora del registro del pago",
-                      "example": "2024-01-15T10:30:00.000Z"
-                    },
-                    "notas": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "example": "Pago parcial"
-                    },
-                    "tenant_id": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "cuenta_id": {
-                      "type": "integer",
-                      "description": "ID de la Cuenta por Cobrar asociada",
-                      "example": 10
-                    },
-                    "usuario_id": {
-                      "type": [
-                        "integer",
-                        "null"
-                      ],
-                      "description": "ID del usuario que registró el pago",
-                      "example": 5
-                    },
-                    "usuario": {
-                      "type": [
-                        "object",
-                        "null"
-                      ],
-                      "properties": {
-                        "id": {
-                          "type": "integer"
-                        },
-                        "nombre": {
-                          "type": "string"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "nombre",
-                        "email"
-                      ],
-                      "description": "Datos del usuario que registró el pago"
-                    }
-                  }
-                }
-              ]
             }
           },
           "meta": {
@@ -13907,14 +14215,14 @@
             "schema": {
               "type": "string",
               "enum": [
-                "entrada",
-                "salida"
+                "ENTRADA_AJUSTE",
+                "SALIDA_AJUSTE"
               ],
-              "description": "Filtrar por tipo de ajuste",
-              "example": "entrada"
+              "description": "Filtrar por tipo de movimiento",
+              "example": "ENTRADA_AJUSTE"
             },
             "required": false,
-            "description": "Filtrar por tipo de ajuste",
+            "description": "Filtrar por tipo de movimiento",
             "name": "tipo",
             "in": "query"
           },
@@ -27772,7 +28080,7 @@
           "Pagos (Cuentas por Cobrar)"
         ],
         "summary": "Registrar pago sobre Cuenta por Cobrar",
-        "description": "Registra un pago (total o parcial) sobre una Cuenta por Cobrar.\n\n**Proceso automático:**\n1. Valida que la CxC exista y no esté CANCELADA\n2. Valida que el monto no exceda el saldo pendiente\n3. Crea registro en tabla Pagos\n4. Recalcula saldo_pendiente de la CxC\n5. Actualiza estado de la CxC (VIGENTE → PAGADA si saldo = 0)\n6. Actualiza estado_pago de la Venta (PENDIENTE → PARCIAL → PAGADO)\n\n**Validaciones:**\n- Monto > 0\n- Monto <= saldo_pendiente\n- CxC no cancelada\n\n**Casos de error:**\n- `CUENTA_NOT_FOUND`: CxC no existe\n- `CUENTA_CANCELADA`: No se pueden registrar pagos sobre cuentas anuladas por NC\n- `MONTO_EXCEDE_SALDO`: El pago supera la deuda pendiente",
+        "description": "Registra un pago (total o parcial) sobre una Cuenta por Cobrar.\n\n**Proceso automático:**\n1. Valida que la CxC exista y no esté CANCELADA\n2. Valida que el monto no exceda el saldo pendiente\n3. Crea registro en tabla Pagos\n4. Recalcula saldo_pendiente de la CxC\n5. Actualiza estado de la CxC (VIGENTE → PAGADA si saldo = 0)\n6. Registra movimiento de caja (INGRESO) si hay sesión activa\n\n**Validaciones:**\n- Monto > 0\n- Monto <= saldo_pendiente\n- CxC no cancelada\n\n**Casos de error:**\n- `CUENTA_NOT_FOUND`: CxC no existe\n- `CUENTA_CANCELADA`: No se pueden registrar pagos sobre cuentas anuladas por NC\n- `MONTO_EXCEDE_SALDO`: El pago supera la deuda pendiente",
         "security": [
           {
             "bearerAuth": []
@@ -27796,59 +28104,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreatePago"
-                  },
-                  {
-                    "properties": {
-                      "monto": {
-                        "anyOf": [
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "string"
-                          }
-                        ],
-                        "description": "Monto del pago (máximo 2 decimales)",
-                        "example": 150.5
-                      },
-                      "metodo_pago": {
-                        "type": "string",
-                        "enum": [
-                          "EFECTIVO",
-                          "TARJETA",
-                          "TRANSFERENCIA",
-                          "YAPE",
-                          "PLIN",
-                          "CHEQUE",
-                          "OTROS"
-                        ],
-                        "description": "Método de pago utilizado",
-                        "example": "EFECTIVO"
-                      },
-                      "referencia": {
-                        "type": "string",
-                        "maxLength": 100,
-                        "description": "Número de operación, voucher, o referencia del pago",
-                        "example": "OP-12345678"
-                      },
-                      "notas": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "Notas adicionales sobre el pago",
-                        "example": "Pago parcial - Cliente abonó primera cuota"
-                      },
-                      "sesion_caja_id": {
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "description": "ID de la sesión de caja para registrar el ingreso automático (opcional)",
-                        "example": 1
-                      }
-                    }
-                  }
-                ]
+                "$ref": "#/components/schemas/CreatePago"
               }
             }
           }
@@ -27865,97 +28121,7 @@
                       "type": "string"
                     },
                     "data": {
-                      "allOf": [
-                        {
-                          "$ref": "#/components/schemas/Pago"
-                        },
-                        {
-                          "properties": {
-                            "id": {
-                              "type": "integer",
-                              "example": 1
-                            },
-                            "monto": {
-                              "type": "number",
-                              "example": 150.5
-                            },
-                            "metodo_pago": {
-                              "type": "string",
-                              "enum": [
-                                "EFECTIVO",
-                                "TARJETA",
-                                "TRANSFERENCIA",
-                                "YAPE",
-                                "PLIN",
-                                "CHEQUE",
-                                "OTROS"
-                              ],
-                              "example": "EFECTIVO"
-                            },
-                            "referencia": {
-                              "type": [
-                                "string",
-                                "null"
-                              ],
-                              "example": "OP-12345678"
-                            },
-                            "fecha_pago": {
-                              "type": "string",
-                              "format": "date-time",
-                              "description": "Fecha y hora del registro del pago",
-                              "example": "2024-01-15T10:30:00.000Z"
-                            },
-                            "notas": {
-                              "type": [
-                                "string",
-                                "null"
-                              ],
-                              "example": "Pago parcial"
-                            },
-                            "tenant_id": {
-                              "type": "integer",
-                              "example": 1
-                            },
-                            "cuenta_id": {
-                              "type": "integer",
-                              "description": "ID de la Cuenta por Cobrar asociada",
-                              "example": 10
-                            },
-                            "usuario_id": {
-                              "type": [
-                                "integer",
-                                "null"
-                              ],
-                              "description": "ID del usuario que registró el pago",
-                              "example": 5
-                            },
-                            "usuario": {
-                              "type": [
-                                "object",
-                                "null"
-                              ],
-                              "properties": {
-                                "id": {
-                                  "type": "integer"
-                                },
-                                "nombre": {
-                                  "type": "string"
-                                },
-                                "email": {
-                                  "type": "string",
-                                  "format": "email"
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "nombre",
-                                "email"
-                              ],
-                              "description": "Datos del usuario que registró el pago"
-                            }
-                          }
-                        }
-                      ]
+                      "$ref": "#/components/schemas/Pago"
                     }
                   },
                   "required": [
@@ -28140,97 +28306,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "allOf": [
-                          {
-                            "$ref": "#/components/schemas/Pago"
-                          },
-                          {
-                            "properties": {
-                              "id": {
-                                "type": "integer",
-                                "example": 1
-                              },
-                              "monto": {
-                                "type": "number",
-                                "example": 150.5
-                              },
-                              "metodo_pago": {
-                                "type": "string",
-                                "enum": [
-                                  "EFECTIVO",
-                                  "TARJETA",
-                                  "TRANSFERENCIA",
-                                  "YAPE",
-                                  "PLIN",
-                                  "CHEQUE",
-                                  "OTROS"
-                                ],
-                                "example": "EFECTIVO"
-                              },
-                              "referencia": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ],
-                                "example": "OP-12345678"
-                              },
-                              "fecha_pago": {
-                                "type": "string",
-                                "format": "date-time",
-                                "description": "Fecha y hora del registro del pago",
-                                "example": "2024-01-15T10:30:00.000Z"
-                              },
-                              "notas": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ],
-                                "example": "Pago parcial"
-                              },
-                              "tenant_id": {
-                                "type": "integer",
-                                "example": 1
-                              },
-                              "cuenta_id": {
-                                "type": "integer",
-                                "description": "ID de la Cuenta por Cobrar asociada",
-                                "example": 10
-                              },
-                              "usuario_id": {
-                                "type": [
-                                  "integer",
-                                  "null"
-                                ],
-                                "description": "ID del usuario que registró el pago",
-                                "example": 5
-                              },
-                              "usuario": {
-                                "type": [
-                                  "object",
-                                  "null"
-                                ],
-                                "properties": {
-                                  "id": {
-                                    "type": "integer"
-                                  },
-                                  "nombre": {
-                                    "type": "string"
-                                  },
-                                  "email": {
-                                    "type": "string",
-                                    "format": "email"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "nombre",
-                                  "email"
-                                ],
-                                "description": "Datos del usuario que registró el pago"
-                              }
-                            }
-                          }
-                        ]
+                        "$ref": "#/components/schemas/Pago"
                       }
                     }
                   },

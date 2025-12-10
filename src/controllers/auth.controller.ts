@@ -107,6 +107,13 @@ export const loginHandler = asyncHandler(async (req: RequestWithTenant, res: Res
         { expiresIn: '1d' }
     );
 
+    // Obtener información del tenant para incluir en la respuesta
+    const tenant = await tenantModel.findTenantById(req.tenantId!);
+    if (!tenant) {
+        res.status(404).json({ message: 'Tenant no encontrado.' });
+        return;
+    }
+
     res.status(200).json({
         token: token,
         user: {
@@ -114,7 +121,11 @@ export const loginHandler = asyncHandler(async (req: RequestWithTenant, res: Res
             email: usuario.email,
             nombre: usuario.nombre,
             rol: usuario.rol,
-            tenantId: req.tenantId
+        },
+        tenant: {
+            id: tenant.id,
+            nombre_empresa: tenant.nombre_empresa,
+            subdominio: tenant.subdominio,
         }
     });
 });
