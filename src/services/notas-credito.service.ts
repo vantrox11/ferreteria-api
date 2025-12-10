@@ -295,17 +295,8 @@ export const createNotaCredito = async (
         console.log(`  ✅ Nuevo saldo: S/ ${nuevoSaldo}`);
       }
 
-      // Actualizar estado de pago en la venta
-      const nuevoEstadoPagoVenta = Number(ventaOriginal.CuentasPorCobrar.saldo_pendiente) === 0
-        ? 'PAGADO'
-        : 'PARCIAL';
-
-      await tx.ventas.update({
-        where: { id: ventaOriginal.id },
-        data: {
-          estado_pago: nuevoEstadoPagoVenta,
-        },
-      });
+      // Estado de pago se deriva ahora de CuentasPorCobrar (Single Source of Truth)
+      // Ya no actualizamos Ventas directamente
     } else if (data.tipo_nota === 'CORRECCION_POR_ERROR_EN_LA_DESCRIPCION') {
       console.log('📝 [NC] Tipo 03: Corrección de texto - NO afecta deuda ni stock');
     }

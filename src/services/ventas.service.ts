@@ -111,7 +111,8 @@ export const findVentasPaginadas = async (
               }
             }
           }
-        }
+        },
+        CuentasPorCobrar: true, // Para derivar estado_pago y saldo_pendiente
       },
     }),
   ]);
@@ -166,6 +167,7 @@ export const findVentaByIdAndTenant = async (tenantId: number, id: number) => {
         },
       },
       pedido_origen: { select: { id: true, estado: true, tipo_recojo: true } },
+      CuentasPorCobrar: true, // Para derivar estado_pago y saldo_pendiente
     },
   });
 };
@@ -326,12 +328,7 @@ export const createVenta = async (
         serie_id: serie.id,
         numero_comprobante: nuevoCorrelativo,
         condicion_pago: data.condicion_pago || 'CONTADO',
-        estado_pago: data.condicion_pago === 'CREDITO' ? 'PENDIENTE' : 'PAGADO',
-        saldo_pendiente: data.condicion_pago === 'CREDITO' ? Number(total.toFixed(2)) : 0,
-        monto_pagado: data.condicion_pago === 'CREDITO' ? 0 : Number(total.toFixed(2)),
-        fecha_vencimiento: data.condicion_pago === 'CREDITO' && data.cliente_id
-          ? await calcularFechaVencimiento(tx, tenantId, data.cliente_id)
-          : null,
+        // estado_pago, saldo_pendiente, monto_pagado → Derivados de CuentasPorCobrar
       },
     });
 
@@ -363,8 +360,8 @@ export const createVenta = async (
       });
     }
 
-    // 8. Si es venta a CREDITO, crear Cuenta Por Cobrar
-    if (data.condicion_pago === 'CREDITO' && data.cliente_id && nuevaVenta.fecha_vencimiento) {
+    // 8. Si es venta a CREDITO, crear Cuenta Por Cobrar (ÚNICA FUENTE DE VERDAD para saldos)
+    if (data.condicion_pago === 'CREDITO' && data.cliente_id) {
       const montoTotal = Number(total.toFixed(2));
       const pagoInicial = data.pago_inicial ? Number(data.pago_inicial) : 0;
 
@@ -377,6 +374,7 @@ export const createVenta = async (
       }
 
       const saldoPendiente = montoTotal - pagoInicial;
+      const fechaVencimiento = await calcularFechaVencimiento(tx, tenantId, data.cliente_id);
 
       // Crear Cuenta Por Cobrar con el saldo ajustado
       const cuentaPorCobrar = await tx.cuentasPorCobrar.create({
@@ -389,7 +387,7 @@ export const createVenta = async (
           saldo_pendiente: saldoPendiente,
           estado: saldoPendiente === 0 ? 'PAGADA' : 'VIGENTE',
           fecha_emision: new Date(),
-          fecha_vencimiento: nuevaVenta.fecha_vencimiento,
+          fecha_vencimiento: fechaVencimiento,
         },
       });
 
@@ -408,15 +406,7 @@ export const createVenta = async (
           },
         });
 
-        // Actualizar estado de la venta según el pago inicial
-        await tx.ventas.update({
-          where: { id: nuevaVenta.id },
-          data: {
-            estado_pago: saldoPendiente === 0 ? 'PAGADO' : 'PARCIAL',
-            saldo_pendiente: saldoPendiente,
-            monto_pagado: pagoInicial,
-          },
-        });
+        // Ya no actualizamos Ventas - CuentasPorCobrar es la única fuente de verdad
 
         // [TRAZABILIDAD FINANCIERA] Registrar ingreso automático en caja por pago inicial
         if (sesionCajaId) {

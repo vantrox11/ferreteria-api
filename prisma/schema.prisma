@@ -17,7 +17,6 @@ model UnidadesMedida {
   tenant            Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
 
   @@unique([tenant_id, codigo])
-  @@index([tenant_id])
 }
 
 model Marcas {
@@ -30,7 +29,6 @@ model Marcas {
   productos Productos[]
 
   @@unique([tenant_id, nombre])
-  @@index([tenant_id])
 }
 
 model Tenants {
@@ -83,7 +81,6 @@ model Usuarios {
   ventas                 Ventas[]
 
   @@unique([tenant_id, email])
-  @@index([tenant_id])
 }
 
 model Categorias {
@@ -96,7 +93,6 @@ model Categorias {
   productos   Productos[]
 
   @@unique([tenant_id, nombre])
-  @@index([tenant_id])
 }
 
 model Productos {
@@ -129,7 +125,6 @@ model Productos {
   VentaDetalles          VentaDetalles[]
 
   @@unique([tenant_id, sku])
-  @@index([tenant_id])
   @@index([categoria_id])
   @@index([marca_id])
   @@index([unidad_medida_id])
@@ -186,7 +181,6 @@ model Proveedores {
   tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
 
   @@unique([tenant_id, ruc_identidad])
-  @@index([tenant_id])
   @@index([tipo_documento])
 }
 
@@ -261,7 +255,6 @@ model Clientes {
   ventas              Ventas[]
 
   @@unique([tenant_id, documento_identidad])
-  @@index([tenant_id])
   @@index([ruc])
 }
 
@@ -278,10 +271,7 @@ model Ventas {
   serie_id               Int?
   sesion_caja_id         Int?
   condicion_pago         Ventas_condicion_pago   @default(CONTADO)
-  estado_pago            Ventas_estado_pago      @default(PAGADO)
-  fecha_vencimiento      DateTime?
-  monto_pagado           Decimal                 @default(0.00) @db.Decimal(12, 2)
-  saldo_pendiente        Decimal                 @default(0.00) @db.Decimal(12, 2)
+  // estado_pago, monto_pagado, saldo_pendiente → Derivados de CuentasPorCobrar (Single Source of Truth)
   cdr_url                String?
   codigo_qr              String?                 @db.Text
   estado_sunat           Ventas_estado_sunat?    @default(PENDIENTE)
@@ -324,10 +314,9 @@ model VentaDetalles {
   tenant          Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
   venta           Ventas    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
 
-  @@index([tenant_id])
   @@index([venta_id])
   @@index([producto_id])
-  @@index([tenant_id, venta_id]) // Optimiza: "Dame detalles de venta X del tenant Y"
+  @@index([tenant_id, venta_id]) // Optimiza: "Dame detalles de venta X del tenant Y" (también cubre búsquedas solo por tenant_id)
 }
 
 model Pedidos {
@@ -374,7 +363,6 @@ model Cajas {
   sesiones  SesionesCaja[]
 
   @@unique([tenant_id, nombre])
-  @@index([tenant_id])
 }
 
 model SesionesCaja {
@@ -448,7 +436,6 @@ model Series {
   tenant             Tenants                 @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
 
   @@unique([tenant_id, codigo])
-  @@index([tenant_id])
   @@index([caja_id])
   @@index([tipo_comprobante])
 }

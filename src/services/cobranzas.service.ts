@@ -215,25 +215,8 @@ export const registrarPago = async (
       },
     });
 
-    // 5. Actualizar estado de pago en la venta
-    // ✅ CORRECCIÓN: La condición nuevoMontoPagado === 0 nunca será true aquí
-    // porque acabamos de registrar un pago (nuevoMontoPagado >= pagoData.monto > 0)
-    let estadoPagoVenta: 'PENDIENTE' | 'PARCIAL' | 'PAGADO';
-    if (nuevoSaldo === 0) {
-      estadoPagoVenta = 'PAGADO';
-    } else {
-      // Si hay saldo pendiente y ya se pagó algo, es PARCIAL
-      estadoPagoVenta = 'PARCIAL';
-    }
-
-    await tx.ventas.update({
-      where: { id: cuenta.venta_id },
-      data: {
-        estado_pago: estadoPagoVenta,
-        monto_pagado: nuevoMontoPagado,
-        saldo_pendiente: nuevoSaldo,
-      },
-    });
+    // Estado de pago se deriva ahora de CuentasPorCobrar (Single Source of Truth)
+    // Ya no actualizamos Ventas directamente
 
     // Mapear nombres de relaciones para compatibilidad con frontend
     return {

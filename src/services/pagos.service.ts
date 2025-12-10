@@ -119,46 +119,34 @@ export const registrarPago = async (
     console.log(`  ✅ Nuevo saldo: S/ ${nuevoSaldo.toFixed(2)}`);
     console.log(`  ✅ Nuevo estado CxC: ${nuevoEstado}`);
 
-    // 6. Actualizar estado_pago de la Venta
-    if (cuentaPorCobrar.venta) {
-      const nuevoEstadoPagoVenta = nuevoSaldo === 0 ? 'PAGADO' : 'PARCIAL';
+    // Estado de pago se deriva ahora de CuentasPorCobrar (Single Source of Truth)
+    // Ya no actualizamos Ventas directamente
 
-      await tx.ventas.update({
+    // 6. [TRAZABILIDAD FINANCIERA] Registrar ingreso automático en caja
+    if (data.sesion_caja_id && cuentaPorCobrar.venta) {
+      // Obtener información de la venta para la descripción
+      const ventaInfo = await tx.ventas.findFirst({
         where: { id: cuentaPorCobrar.venta.id },
+        include: { serie: true },
+      });
+
+      const descripcion = ventaInfo?.serie
+        ? `Pago por Venta ${ventaInfo.serie.codigo}-${ventaInfo.numero_comprobante}`
+        : `Pago de cuenta por cobrar #${cuentaId}`;
+
+      await tx.movimientosCaja.create({
         data: {
-          estado_pago: nuevoEstadoPagoVenta,
-          saldo_pendiente: nuevoSaldo,
+          tenant_id: tenantId,
+          sesion_caja_id: data.sesion_caja_id,
+          tipo: 'INGRESO',
+          monto: montoPago,
+          descripcion,
+          pago_id: pago.id, // FK explícita
+          es_manual: false,
         },
       });
 
-      console.log(`  ✅ Estado venta actualizado: ${nuevoEstadoPagoVenta}`);
-
-      // 7. [TRAZABILIDAD FINANCIERA] Registrar ingreso automático en caja
-      if (data.sesion_caja_id) {
-        // Obtener información de la venta para la descripción
-        const ventaInfo = await tx.ventas.findFirst({
-          where: { id: cuentaPorCobrar.venta.id },
-          include: { serie: true },
-        });
-
-        const descripcion = ventaInfo?.serie
-          ? `Pago por Venta ${ventaInfo.serie.codigo}-${ventaInfo.numero_comprobante}`
-          : `Pago de cuenta por cobrar #${cuentaId}`;
-
-        await tx.movimientosCaja.create({
-          data: {
-            tenant_id: tenantId,
-            sesion_caja_id: data.sesion_caja_id,
-            tipo: 'INGRESO',
-            monto: montoPago,
-            descripcion,
-            pago_id: pago.id, // FK explícita
-            es_manual: false,
-          },
-        });
-
-        console.log(`  💰 Ingreso automático registrado en caja: S/ ${montoPago.toFixed(2)}`);
-      }
+      console.log(`  💰 Ingreso automático registrado en caja: S/ ${montoPago.toFixed(2)}`);
     }
 
     return pago;

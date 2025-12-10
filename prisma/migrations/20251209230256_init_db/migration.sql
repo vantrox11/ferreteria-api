@@ -6,7 +6,6 @@ CREATE TABLE `UnidadesMedida` (
     `permite_decimales` BOOLEAN NOT NULL DEFAULT false,
     `tenant_id` INTEGER NOT NULL,
 
-    INDEX `UnidadesMedida_tenant_id_idx`(`tenant_id`),
     UNIQUE INDEX `UnidadesMedida_tenant_id_codigo_key`(`tenant_id`, `codigo`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -19,7 +18,6 @@ CREATE TABLE `Marcas` (
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `tenant_id` INTEGER NOT NULL,
 
-    INDEX `Marcas_tenant_id_idx`(`tenant_id`),
     UNIQUE INDEX `Marcas_tenant_id_nombre_key`(`tenant_id`, `nombre`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -47,7 +45,6 @@ CREATE TABLE `Usuarios` (
     `tenant_id` INTEGER NOT NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
 
-    INDEX `Usuarios_tenant_id_idx`(`tenant_id`),
     UNIQUE INDEX `Usuarios_tenant_id_email_key`(`tenant_id`, `email`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -60,7 +57,6 @@ CREATE TABLE `Categorias` (
     `tenant_id` INTEGER NOT NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
 
-    INDEX `Categorias_tenant_id_idx`(`tenant_id`),
     UNIQUE INDEX `Categorias_tenant_id_nombre_key`(`tenant_id`, `nombre`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -85,7 +81,6 @@ CREATE TABLE `Productos` (
     `version` INTEGER NOT NULL DEFAULT 0,
     `deletedAt` DATETIME(3) NULL,
 
-    INDEX `Productos_tenant_id_idx`(`tenant_id`),
     INDEX `Productos_categoria_id_idx`(`categoria_id`),
     INDEX `Productos_marca_id_idx`(`marca_id`),
     INDEX `Productos_unidad_medida_id_idx`(`unidad_medida_id`),
@@ -133,7 +128,6 @@ CREATE TABLE `Proveedores` (
     `tipo_documento` ENUM('RUC', 'DNI', 'CE') NOT NULL DEFAULT 'RUC',
     `deletedAt` DATETIME(3) NULL,
 
-    INDEX `Proveedores_tenant_id_idx`(`tenant_id`),
     INDEX `Proveedores_tipo_documento_idx`(`tipo_documento`),
     UNIQUE INDEX `Proveedores_tenant_id_ruc_identidad_key`(`tenant_id`, `ruc_identidad`),
     PRIMARY KEY (`id`)
@@ -202,7 +196,6 @@ CREATE TABLE `Clientes` (
     `limite_credito` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     `deletedAt` DATETIME(3) NULL,
 
-    INDEX `Clientes_tenant_id_idx`(`tenant_id`),
     INDEX `Clientes_ruc_idx`(`ruc`),
     UNIQUE INDEX `Clientes_tenant_id_documento_identidad_key`(`tenant_id`, `documento_identidad`),
     PRIMARY KEY (`id`)
@@ -256,7 +249,6 @@ CREATE TABLE `VentaDetalles` (
     `tasa_igv` DECIMAL(5, 4) NOT NULL,
     `valor_unitario` DECIMAL(12, 4) NOT NULL,
 
-    INDEX `VentaDetalles_tenant_id_idx`(`tenant_id`),
     INDEX `VentaDetalles_venta_id_idx`(`venta_id`),
     INDEX `VentaDetalles_producto_id_idx`(`producto_id`),
     INDEX `VentaDetalles_tenant_id_venta_id_idx`(`tenant_id`, `venta_id`),
@@ -300,7 +292,6 @@ CREATE TABLE `Cajas` (
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `tenant_id` INTEGER NOT NULL,
 
-    INDEX `Cajas_tenant_id_idx`(`tenant_id`),
     UNIQUE INDEX `Cajas_tenant_id_nombre_key`(`tenant_id`, `nombre`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -360,7 +351,6 @@ CREATE TABLE `Series` (
     `tenant_id` INTEGER NOT NULL,
     `caja_id` INTEGER NULL,
 
-    INDEX `Series_tenant_id_idx`(`tenant_id`),
     INDEX `Series_caja_id_idx`(`caja_id`),
     INDEX `Series_tipo_comprobante_idx`(`tipo_comprobante`),
     UNIQUE INDEX `Series_tenant_id_codigo_key`(`tenant_id`, `codigo`),
