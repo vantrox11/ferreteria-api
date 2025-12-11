@@ -98,13 +98,13 @@ export const NotaCreditoDetalleResponseSchema = registry.register(
     id: z.number().int().openapi({ example: 1 }),
     producto_id: z.number().int().openapi({ example: 1 }),
     cantidad: z.number().openapi({ example: 2.0 }),
-    valor_unitario: z.number().openapi({ 
+    valor_unitario: z.number().openapi({
       description: 'Precio sin IGV',
-      example: 21.61 
+      example: 21.61
     }),
-    precio_unitario: z.number().openapi({ 
+    precio_unitario: z.number().openapi({
       description: 'Precio con IGV',
-      example: 25.50 
+      example: 25.50
     }),
     igv_total: z.number().openapi({ example: 3.89 }),
     tasa_igv: z.number().openapi({ example: 0.18 }),
@@ -133,45 +133,45 @@ export const NotaCreditoResponseSchema = registry.register(
     }).nullable().optional().openapi({
       description: 'Datos de la serie SUNAT (expandido)',
     }),
-    numero: z.number().int().openapi({ 
+    numero: z.number().int().openapi({
       description: 'Número correlativo',
-      example: 1 
+      example: 1
     }),
     tipo_nota: TipoNotaCreditoEnum.openapi({ example: 'DEVOLUCION_TOTAL' }),
-    motivo_sustento: z.string().openapi({ 
-      example: 'Cliente devuelve mercadería por producto defectuoso' 
+    motivo_sustento: z.string().openapi({
+      example: 'Cliente devuelve mercadería por producto defectuoso'
     }),
-    monto_total: z.number().openapi({ 
+    monto_total: z.number().openapi({
       description: 'Monto total de la NC',
-      example: 150.00 
+      example: 150.00
     }),
-    stock_retornado: z.boolean().openapi({ 
+    stock_retornado: z.boolean().openapi({
       description: 'Indica si el stock ya fue devuelto al inventario',
-      example: true 
+      example: true
     }),
     estado_sunat: EstadoSunatEnum.nullable().openapi({ example: 'ACEPTADO' }),
-    xml_url: z.string().nullable().openapi({ 
+    xml_url: z.string().nullable().openapi({
       description: 'URL del XML firmado',
-      example: 'https://storage.example.com/xml/FN01-1.xml' 
+      example: 'https://storage.example.com/xml/FN01-1.xml'
     }),
-    cdr_url: z.string().nullable().openapi({ 
+    cdr_url: z.string().nullable().openapi({
       description: 'URL de la Constancia de Recepción',
-      example: 'https://storage.example.com/cdr/R-FN01-1.xml' 
+      example: 'https://storage.example.com/cdr/R-FN01-1.xml'
     }),
-    hash_cpe: z.string().nullable().openapi({ 
+    hash_cpe: z.string().nullable().openapi({
       description: 'Hash del comprobante',
-      example: 'abc123hash' 
+      example: 'abc123hash'
     }),
-    fecha_emision: z.string().datetime().openapi({ 
-      example: '2025-12-01T10:00:00Z' 
+    fecha_emision: z.string().datetime().openapi({
+      example: '2025-12-01T10:00:00Z'
     }),
-    created_at: z.string().datetime().openapi({ 
-      example: '2025-12-01T10:00:00Z' 
+    created_at: z.string().datetime().openapi({
+      example: '2025-12-01T10:00:00Z'
     }),
     tenant_id: z.number().int().openapi({ example: 1 }),
-    venta_referencia_id: z.number().int().openapi({ 
+    venta_referencia_id: z.number().int().openapi({
       description: 'ID de la venta original',
-      example: 123 
+      example: 123
     }),
     venta_referencia: z.object({
       id: z.number().int(),
@@ -186,13 +186,15 @@ export const NotaCreditoResponseSchema = registry.register(
         id: z.number().int(),
         nombre: z.string(),
         documento_identidad: z.string().nullable(),
+        ruc: z.string().nullable(),
+        razon_social: z.string().nullable(),
       }).nullable().optional(),
     }).optional().openapi({
       description: 'Datos de la venta referenciada',
     }),
-    usuario_id: z.number().int().nullable().openapi({ 
+    usuario_id: z.number().int().nullable().openapi({
       description: 'ID del usuario que emitió la NC',
-      example: 1 
+      example: 1
     }),
     usuario: z.object({
       id: z.number().int(),

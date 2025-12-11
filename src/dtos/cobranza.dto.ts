@@ -198,6 +198,14 @@ export const ResumenCobranzasSchema = registry.register(
       description: 'Total de cuentas vencidas',
       example: 3,
     }),
+    total_por_vencer: z.number().openapi({
+      description: 'Total de cuentas que vencen en los próximos 7 días',
+      example: 5,
+    }),
+    monto_total: z.number().openapi({
+      description: 'Suma total de saldos pendientes',
+      example: 21500.00,
+    }),
     monto_vigente: z.number().openapi({
       description: 'Suma de saldos pendientes vigentes',
       example: 15000.00,

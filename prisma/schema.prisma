@@ -308,7 +308,7 @@ model VentaDetalles {
   venta_id        Int
   producto_id     Int
   igv_total       Decimal   @db.Decimal(12, 4)
-  tasa_igv        Decimal   @db.Decimal(5, 4)
+  tasa_igv        Decimal   @db.Decimal(5, 2)
   valor_unitario  Decimal   @db.Decimal(12, 4)
   producto        Productos @relation(fields: [producto_id], references: [id])
   tenant          Tenants   @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
@@ -549,7 +549,7 @@ model NotaCreditoDetalles {
   valor_unitario  Decimal      @db.Decimal(12, 4)
   precio_unitario Decimal      @db.Decimal(12, 4)
   igv_total       Decimal      @db.Decimal(12, 4)
-  tasa_igv        Decimal      @db.Decimal(5, 4)
+  tasa_igv        Decimal      @db.Decimal(5, 2)
   tenant_id       Int
   nota_credito_id Int
   nota_credito    NotasCredito @relation(fields: [nota_credito_id], references: [id], onDelete: Restrict)

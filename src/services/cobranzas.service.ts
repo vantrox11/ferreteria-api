@@ -320,16 +320,23 @@ export const getResumenCobranzas = async (tenantId: number) => {
           lte: enSieteDias,
         },
       },
+      _count: true,
       _sum: { saldo_pendiente: true },
     }),
   ]);
 
+  const montoVigente = Number(vigentes._sum.saldo_pendiente || 0);
+  const montoVencido = Number(vencidas._sum.saldo_pendiente || 0);
+  const montoPorVencer = Number(porVencer._sum.saldo_pendiente || 0);
+
   return {
     total_vigentes: vigentes._count,
     total_vencidas: vencidas._count,
-    monto_vigente: Number(vigentes._sum.saldo_pendiente || 0),
-    monto_vencido: Number(vencidas._sum.saldo_pendiente || 0),
-    monto_por_vencer: Number(porVencer._sum.saldo_pendiente || 0),
+    total_por_vencer: porVencer._count,
+    monto_total: montoVigente + montoVencido,
+    monto_vigente: montoVigente,
+    monto_vencido: montoVencido,
+    monto_por_vencer: montoPorVencer,
   };
 };
 

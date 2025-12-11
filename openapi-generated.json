@@ -3272,13 +3272,27 @@
               },
               "tipo_documento": {
                 "type": "string"
+              },
+              "telefono": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
               "id",
               "nombre",
               "ruc_identidad",
-              "tipo_documento"
+              "tipo_documento",
+              "telefono",
+              "email"
             ]
           },
           "usuario_id": {
@@ -5180,7 +5194,9 @@
                     "venta",
                     "compra",
                     "ajuste_entrada",
-                    "ajuste_salida"
+                    "ajuste_salida",
+                    "devolucion_entrada",
+                    "devolucion_salida"
                   ],
                   "description": "Tipo de movimiento que afecta el stock",
                   "example": "venta"
@@ -6158,6 +6174,16 @@
             "description": "Total de cuentas vencidas",
             "example": 3
           },
+          "total_por_vencer": {
+            "type": "number",
+            "description": "Total de cuentas que vencen en los próximos 7 días",
+            "example": 5
+          },
+          "monto_total": {
+            "type": "number",
+            "description": "Suma total de saldos pendientes",
+            "example": 21500
+          },
           "monto_vigente": {
             "type": "number",
             "description": "Suma de saldos pendientes vigentes",
@@ -6177,6 +6203,8 @@
         "required": [
           "total_vigentes",
           "total_vencidas",
+          "total_por_vencer",
+          "monto_total",
           "monto_vigente",
           "monto_vencido",
           "monto_por_vencer"
@@ -6812,12 +6840,26 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "ruc": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "razon_social": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
                   "id",
                   "nombre",
-                  "documento_identidad"
+                  "documento_identidad",
+                  "ruc",
+                  "razon_social"
                 ]
               }
             },

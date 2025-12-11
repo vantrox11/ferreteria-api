@@ -1,6 +1,7 @@
 import { Prisma, TipoMovimientoInventario } from '@prisma/client';
 import { NotFoundError, StockInsuficienteError, ConcurrencyError, AppError } from '../utils/app-error';
 import { db, dbBase } from '../config/db';
+import { CreateInventarioAjusteDTO } from '../dtos/inventario.dto';
 
 /**
  * Servicio centralizado de inventario con bloqueo optimista.
@@ -240,16 +241,8 @@ export const crearEntradaDevolucion = (
 // (Migradas desde inventario.model.ts)
 // ============================================
 
-/**
- * DTO para crear ajuste de inventario
- * Usa el enum TipoMovimientoInventario directamente
- */
-export interface CreateInventarioAjusteDTO {
-    producto_id: number;
-    tipo_movimiento: 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE';
-    cantidad: number;
-    motivo: string;
-}
+// NOTA: El tipo CreateInventarioAjusteDTO se importa de ../dtos/inventario.dto
+// Tiene campos: producto_id, tipo ('entrada' | 'salida'), cantidad, motivo
 
 /**
  * Obtiene movimientos de inventario con paginación, búsqueda y filtros (SERVER-SIDE)
@@ -368,11 +361,15 @@ export const createInventarioAjuste = async (
     usuarioId?: number
 ) => {
     return dbBase.$transaction(async (tx) => {
+        // Convertir tipo del DTO ('entrada'|'salida') al enum de Prisma
+        const tipoMovimiento: TipoMovimientoInventario =
+            data.tipo === 'entrada' ? 'ENTRADA_AJUSTE' : 'SALIDA_AJUSTE';
+
         // Usar función registrarMovimiento del mismo módulo
         const resultado = await registrarMovimiento(tx, {
             tenantId,
             productoId: data.producto_id,
-            tipo: data.tipo_movimiento,
+            tipo: tipoMovimiento,
             cantidad: Number(data.cantidad),
             ajusteManual: true,
             motivo: data.motivo,

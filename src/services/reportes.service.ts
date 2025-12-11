@@ -97,7 +97,7 @@ export const generarKardexCompleto = async (
   // 4. Unificar movimientos en un solo array con tipo discriminado
   type MovimientoKardex = {
     fecha: Date;
-    tipo: 'venta' | 'compra' | 'ajuste_entrada' | 'ajuste_salida';
+    tipo: 'venta' | 'compra' | 'ajuste_entrada' | 'ajuste_salida' | 'devolucion_entrada' | 'devolucion_salida';
     cantidad: number;
     referencia: string;
     tercero?: string;
@@ -145,15 +145,36 @@ export const generarKardexCompleto = async (
     });
   });
 
-  // Mapear ajustes con formato mejorado
+  // Mapear ajustes y devoluciones con tipo correcto
   ajustes.forEach((a) => {
-    // Formato: AJUSTE-{id} o ADJ-{id_corto}
-    const referencia = `ADJ-${String(a.id).padStart(4, '0')}`;
-    const esEntrada = a.tipo_movimiento === 'ENTRADA_AJUSTE' || a.tipo_movimiento === 'ENTRADA_DEVOLUCION';
+    // Formato: ADJ-{id} para ajustes, DEV-{id} para devoluciones
+    const esDevolucion = a.tipo_movimiento === 'ENTRADA_DEVOLUCION' || a.tipo_movimiento === 'SALIDA_DEVOLUCION';
+    const referencia = esDevolucion
+      ? `DEV-${String(a.id).padStart(4, '0')}`
+      : `ADJ-${String(a.id).padStart(4, '0')}`;
+
+    // Mapear tipo según el movimiento
+    let tipo: MovimientoKardex['tipo'];
+    switch (a.tipo_movimiento) {
+      case 'ENTRADA_AJUSTE':
+        tipo = 'ajuste_entrada';
+        break;
+      case 'SALIDA_AJUSTE':
+        tipo = 'ajuste_salida';
+        break;
+      case 'ENTRADA_DEVOLUCION':
+        tipo = 'devolucion_entrada';
+        break;
+      case 'SALIDA_DEVOLUCION':
+        tipo = 'devolucion_salida';
+        break;
+      default:
+        tipo = 'ajuste_salida'; // Fallback
+    }
 
     movimientos.push({
       fecha: a.created_at,
-      tipo: esEntrada ? 'ajuste_entrada' : 'ajuste_salida',
+      tipo,
       cantidad: Number(a.cantidad),
       referencia,
       motivo: a.motivo || undefined,
@@ -171,7 +192,10 @@ export const generarKardexCompleto = async (
     const saldoAnterior = saldoActual;
 
     // Revertir el movimiento para obtener el saldo anterior
-    if (mov.tipo === 'venta' || mov.tipo === 'ajuste_salida') {
+    // Salidas reducen stock: venta, ajuste_salida, devolucion_salida
+    // Entradas aumentan stock: compra, ajuste_entrada, devolucion_entrada
+    const esSalida = mov.tipo === 'venta' || mov.tipo === 'ajuste_salida' || mov.tipo === 'devolucion_salida';
+    if (esSalida) {
       saldoActual += Number(mov.cantidad); // Era mayor antes de la salida
     } else {
       saldoActual -= Number(mov.cantidad); // Era menor antes de la entrada

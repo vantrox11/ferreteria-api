@@ -12,7 +12,7 @@ const MovimientoKardexSchema = z.object({
     description: 'Fecha del movimiento',
     example: '2024-01-15T10:30:00Z',
   }),
-  tipo: z.enum(['venta', 'compra', 'ajuste_entrada', 'ajuste_salida']).openapi({
+  tipo: z.enum(['venta', 'compra', 'ajuste_entrada', 'ajuste_salida', 'devolucion_entrada', 'devolucion_salida']).openapi({
     description: 'Tipo de movimiento que afecta el stock',
     example: 'venta',
   }),

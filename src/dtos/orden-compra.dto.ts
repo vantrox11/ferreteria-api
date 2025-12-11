@@ -194,6 +194,8 @@ export const OrdenCompraResponseSchema = registry.register(
       nombre: z.string(),
       ruc_identidad: z.string(),
       tipo_documento: z.string(),
+      telefono: z.string().nullable(),
+      email: z.string().nullable(),
     }).nullable().optional(),
     usuario_id: z.number().int().nullable().openapi({
       description: 'Usuario que creó la orden',

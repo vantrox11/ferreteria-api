@@ -16,6 +16,7 @@ import { CreateNotaCreditoDTO } from '../dtos/nota-credito.dto';
 import { obtenerFacturador, type DatosNotaCredito } from '../services/facturador.service';
 import { Prisma, Series_tipo_comprobante } from '@prisma/client';
 import { obtenerSerieActiva, incrementarCorrelativo, obtenerTipoComprobanteNC } from '../utils/series.helper';
+import { registrarMovimiento } from './inventario.service';
 import Decimal from 'decimal.js';
 
 // Configurar Decimal.js para alta precisión
@@ -228,25 +229,42 @@ export const createNotaCredito = async (
     // 4. [CRÍTICO] DEVOLUCIÓN DE STOCK (si corresponde)
     // TIPOS QUE REGRESAN STOCK: Anulación (01), Devolución Total (07), Devolución Parcial (07)
     // TIPOS QUE NO TOCAN STOCK: Descuento Global (08), Corrección de texto (03)
+    // IMPORTANTE: Usamos el placeholder notaCreditoId=-1 porque aún no tenemos el ID
+    // Lo actualizaremos después de crear la NC
+    const movimientosInventarioCreados: number[] = [];
+
     if (data.devolver_stock &&
       (data.tipo_nota === 'ANULACION_DE_LA_OPERACION' ||
         data.tipo_nota === 'DEVOLUCION_TOTAL' ||
         data.tipo_nota === 'DEVOLUCION_PARCIAL')) {
 
-      console.log('📦 [NC] Devolviendo stock al inventario...');
+      console.log('📦 [NC] Devolviendo stock al inventario usando servicio centralizado...');
 
       for (const detalle of data.detalles) {
-        // Incrementar stock del producto
-        await tx.productos.update({
-          where: { id: detalle.producto_id },
-          data: {
-            stock: {
-              increment: detalle.cantidad,
-            },
-          },
+        // Buscar el precio_unitario original de la venta para este producto
+        // Regla 5.2: Valuación de Reingreso - Usar costo de la venta original
+        const detalleVentaOriginal = ventaOriginal.VentaDetalles.find(
+          (vd) => vd.producto_id === detalle.producto_id
+        );
+        const costoUnitario = detalleVentaOriginal
+          ? Number(detalleVentaOriginal.precio_unitario)
+          : undefined;
+
+        // Usar el servicio centralizado de inventario para trazabilidad
+        const resultado = await registrarMovimiento(tx, {
+          tenantId,
+          productoId: detalle.producto_id,
+          tipo: 'ENTRADA_DEVOLUCION',
+          cantidad: detalle.cantidad,
+          costoUnitario, // ✅ Valuación correcta para Kardex
+          // notaCreditoId se actualizará después de crear la NC
+          ajusteManual: false,
+          motivo: `Devolución por NC (pendiente de confirmar ID)`,
+          usuarioId,
         });
 
-        console.log(`  ✅ Producto ID ${detalle.producto_id}: +${detalle.cantidad} unidades`);
+        movimientosInventarioCreados.push(resultado.id);
+        console.log(`  ✅ Producto ID ${detalle.producto_id}: +${detalle.cantidad} unidades @ S/${costoUnitario?.toFixed(2) || 'N/A'} (Mov ID: ${resultado.id})`);
       }
     }
 
@@ -344,6 +362,25 @@ export const createNotaCredito = async (
           tasa_igv: TASA_IGV_DECIMAL.toNumber(),
         },
       });
+    }
+
+    // 6.0.1. [IMPORTANTE] Actualizar los movimientos de inventario con el nota_credito_id
+    // Ahora que tenemos el ID de la NC, actualizamos los movimientos creados antes
+    if (movimientosInventarioCreados.length > 0) {
+      console.log(`📦 [NC] Actualizando ${movimientosInventarioCreados.length} movimientos de inventario con nota_credito_id: ${notaCredito.id}...`);
+
+      await tx.movimientosInventario.updateMany({
+        where: {
+          id: { in: movimientosInventarioCreados },
+          tenant_id: tenantId,
+        },
+        data: {
+          nota_credito_id: notaCredito.id,
+          motivo: `Devolución por NC ${serieActiva.codigo}-${nuevoCorrelativo}`,
+        },
+      });
+
+      console.log('  ✅ Movimientos de inventario actualizados con referencia a NC');
     }
 
     // 6.1. [DEVOLUCIÓN EFECTIVO] Crear movimiento de caja si checkbox activado
@@ -589,7 +626,15 @@ export const listNotasCredito = async (
         venta_referencia: {
           include: {
             serie: true,
-            cliente: true,
+            cliente: {
+              select: {
+                id: true,
+                nombre: true,
+                documento_identidad: true,
+                ruc: true,
+                razon_social: true,
+              },
+            },
           },
         },
         usuario: {
@@ -640,7 +685,15 @@ export const getNotaCreditoById = async (tenantId: number, id: number) => {
       venta_referencia: {
         include: {
           serie: true,
-          cliente: true,
+          cliente: {
+            select: {
+              id: true,
+              nombre: true,
+              documento_identidad: true,
+              ruc: true,
+              razon_social: true,
+            },
+          },
         },
       },
       usuario: {
