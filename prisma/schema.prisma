@@ -17,27 +17,29 @@ model UnidadesMedida {
   tenant            Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
 
   @@unique([tenant_id, codigo])
+  @@map("unidades_medida")
 }
 
 model Marcas {
   id        Int         @id @default(autoincrement())
   nombre    String
   logo_url  String?
-  isActive  Boolean     @default(true)
+  isActive  Boolean     @default(true) @map("is_active")
   tenant_id Int
   tenant    Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
   productos Productos[]
 
   @@unique([tenant_id, nombre])
+  @@map("marcas")
 }
 
 model Tenants {
   id                    Int                     @id @default(autoincrement())
   nombre_empresa        String
   subdominio            String                  @unique
-  isActive              Boolean                 @default(false)
+  isActive              Boolean                 @default(false) @map("is_active")
   configuracion         Json?
-  created_at            DateTime                @default(now()) @map("created_at")
+  created_at            DateTime                @default(now())
   AuditoriaLogs         AuditoriaLogs[]
   Cajas                 Cajas[]
   Categorias            Categorias[]
@@ -59,6 +61,8 @@ model Tenants {
   Usuarios              Usuarios[]
   VentaDetalles         VentaDetalles[]
   Ventas                Ventas[]
+
+  @@map("tenants")
 }
 
 model Usuarios {
@@ -68,7 +72,7 @@ model Usuarios {
   nombre                 String?
   rol                    RolUsuario              @default(empleado)
   tenant_id              Int
-  isActive               Boolean                 @default(true)
+  isActive               Boolean                 @default(true) @map("is_active")
   auditoria_logs         AuditoriaLogs[]
   GuiasRemision          GuiasRemision[]
   movimientos_inventario MovimientosInventario[]
@@ -81,6 +85,7 @@ model Usuarios {
   ventas                 Ventas[]
 
   @@unique([tenant_id, email])
+  @@map("usuarios")
 }
 
 model Categorias {
@@ -88,11 +93,12 @@ model Categorias {
   nombre      String
   descripcion String?
   tenant_id   Int
-  isActive    Boolean     @default(true)
+  isActive    Boolean     @default(true) @map("is_active")
   tenant      Tenants     @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
   productos   Productos[]
 
   @@unique([tenant_id, nombre])
+  @@map("categorias")
 }
 
 model Productos {
@@ -105,14 +111,14 @@ model Productos {
   stock_minimo           Int                     @default(5)
   tenant_id              Int
   categoria_id           Int?
-  isActive               Boolean                 @default(true)
+  isActive               Boolean                 @default(true) @map("is_active")
   marca_id               Int?
   unidad_medida_id       Int
   afectacion_igv         AfectacionIGV           @default(GRAVADO)
   precio_base            Decimal                 @db.Decimal(12, 4)
   imagen_url             String?
   version                Int                     @default(0)
-  deletedAt              DateTime?
+  deletedAt              DateTime?               @map("deleted_at")
   guia_remision_detalles GuiaRemisionDetalles[]
   movimientos_inventario MovimientosInventario[]
   nota_credito_detalles  NotaCreditoDetalles[]
@@ -128,6 +134,7 @@ model Productos {
   @@index([categoria_id])
   @@index([marca_id])
   @@index([unidad_medida_id])
+  @@map("productos")
 }
 
 model MovimientosInventario {
@@ -148,7 +155,7 @@ model MovimientosInventario {
   motivo     String?  @db.Text
   tenant_id  Int
   usuario_id Int?
-  created_at DateTime @default(now()) @map("created_at")
+  created_at DateTime @default(now())
 
   // Relaciones con FKs reales
   producto     Productos      @relation(fields: [producto_id], references: [id])
@@ -164,6 +171,7 @@ model MovimientosInventario {
   @@index([orden_compra_id])
   @@index([nota_credito_id])
   @@index([usuario_id])
+  @@map("movimientos_inventario")
 }
 
 model Proveedores {
@@ -174,22 +182,23 @@ model Proveedores {
   telefono       String?
   direccion      String?
   tenant_id      Int
-  isActive       Boolean         @default(true)
+  isActive       Boolean         @default(true) @map("is_active")
   tipo_documento TipoDocumento   @default(RUC)
-  deletedAt      DateTime?
+  deletedAt      DateTime?       @map("deleted_at")
   ordenes_compra OrdenesCompra[]
   tenant         Tenants         @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
 
   @@unique([tenant_id, ruc_identidad])
   @@index([tipo_documento])
+  @@map("proveedores")
 }
 
 model OrdenesCompra {
   id                     Int                     @id @default(autoincrement())
   total                  Decimal?
   estado                 EstadoOrdenCompra       @default(pendiente)
-  fecha_creacion         DateTime                @default(now()) @map("fecha_creacion")
-  fecha_recepcion        DateTime?               @map("fecha_recepcion")
+  fecha_creacion         DateTime                @default(now())
+  fecha_recepcion        DateTime?
   tenant_id              Int
   proveedor_id           Int?
   usuario_id             Int?
@@ -213,6 +222,7 @@ model OrdenesCompra {
   @@index([usuario_id])
   @@index([tipo_comprobante])
   @@index([fecha_emision])
+  @@map("ordenes_compra")
 }
 
 model OrdenCompraDetalles {
@@ -233,6 +243,7 @@ model OrdenCompraDetalles {
   @@index([tenant_id])
   @@index([orden_compra_id])
   @@index([producto_id])
+  @@map("orden_compra_detalles")
 }
 
 model Clientes {
@@ -243,12 +254,12 @@ model Clientes {
   telefono            String?
   direccion           String?
   tenant_id           Int
-  isActive            Boolean            @default(true)
+  isActive            Boolean            @default(true) @map("is_active")
   razon_social        String?
   ruc                 String?
   dias_credito        Int                @default(0)
   limite_credito      Decimal            @default(0.00) @db.Decimal(12, 2)
-  deletedAt           DateTime?
+  deletedAt           DateTime?          @map("deleted_at")
   tenant              Tenants            @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
   cuentas_por_cobrar  CuentasPorCobrar[]
   pedidos             Pedidos[]
@@ -256,13 +267,14 @@ model Clientes {
 
   @@unique([tenant_id, documento_identidad])
   @@index([ruc])
+  @@map("clientes")
 }
 
 model Ventas {
   id                     Int                     @id @default(autoincrement())
   total                  Decimal                 @db.Decimal(12, 2)
   metodo_pago            String?
-  created_at             DateTime                @default(now()) @map("created_at")
+  created_at             DateTime                @default(now())
   tenant_id              Int
   cliente_id             Int?
   usuario_id             Int?
@@ -298,6 +310,7 @@ model Ventas {
   @@index([pedido_origen_id])
   @@index([sesion_caja_id])
   @@index([serie_id])
+  @@map("ventas")
 }
 
 model VentaDetalles {
@@ -318,11 +331,12 @@ model VentaDetalles {
   @@index([venta_id])
   @@index([producto_id])
   @@index([tenant_id, venta_id]) // Optimiza: "Dame detalles de venta X del tenant Y" (también cubre búsquedas solo por tenant_id)
+  @@map("venta_detalles")
 }
 
 model Pedidos {
   id                 Int              @id @default(autoincrement())
-  created_at         DateTime         @default(now()) @map("created_at")
+  created_at         DateTime         @default(now())
   estado             EstadoPedido     @default(pendiente)
   tipo_recojo        TipoRecojo
   tenant_id          Int
@@ -337,6 +351,7 @@ model Pedidos {
   @@index([tenant_id])
   @@index([cliente_id])
   @@index([usuario_gestion_id])
+  @@map("pedidos")
 }
 
 model PedidoDetalles {
@@ -352,18 +367,20 @@ model PedidoDetalles {
   @@index([tenant_id])
   @@index([pedido_id])
   @@index([producto_id])
+  @@map("pedido_detalles")
 }
 
 model Cajas {
   id        Int            @id @default(autoincrement())
   nombre    String
-  isActive  Boolean        @default(true)
+  isActive  Boolean        @default(true) @map("is_active")
   tenant_id Int
   tenant    Tenants        @relation(fields: [tenant_id], references: [id], onDelete: Restrict)
   series    Series[]
   sesiones  SesionesCaja[]
 
   @@unique([tenant_id, nombre])
+  @@map("cajas")
 }
 
 model SesionesCaja {
@@ -390,6 +407,7 @@ model SesionesCaja {
   @@index([caja_id])
   @@index([usuario_id])
   @@index([estado])
+  @@map("sesiones_caja")
 }
 
 model MovimientosCaja {
@@ -420,6 +438,7 @@ model MovimientosCaja {
   @@index([venta_id])
   @@index([nota_credito_id])
   @@index([pago_id])
+  @@map("movimientos_caja")
 }
 
 model Series {
@@ -427,7 +446,7 @@ model Series {
   codigo             String
   tipo_comprobante   Series_tipo_comprobante
   correlativo_actual Int                     @default(0)
-  isActive           Boolean                 @default(true)
+  isActive           Boolean                 @default(true) @map("is_active")
   tenant_id          Int
   caja_id            Int?
   GuiasRemision      GuiasRemision[]
@@ -439,6 +458,7 @@ model Series {
   @@unique([tenant_id, codigo])
   @@index([caja_id])
   @@index([tipo_comprobante])
+  @@map("series")
 }
 
 model AuditoriaLogs {
@@ -461,6 +481,7 @@ model AuditoriaLogs {
   @@index([accion])
   @@index([tabla_afectada])
   @@index([fecha])
+  @@map("auditoria_logs")
 }
 
 model CuentasPorCobrar {
@@ -485,6 +506,7 @@ model CuentasPorCobrar {
   @@index([estado])
   @@index([fecha_vencimiento])
   @@index([tenant_id])
+  @@map("cuentas_por_cobrar")
 }
 
 model GuiaRemisionDetalles {
@@ -499,6 +521,7 @@ model GuiaRemisionDetalles {
   @@index([guia_remision_id])
   @@index([producto_id])
   @@index([tenant_id])
+  @@map("guia_remision_detalles")
 }
 
 model GuiasRemision {
@@ -541,6 +564,7 @@ model GuiasRemision {
   @@index([tenant_id])
   @@index([usuario_id], map: "GuiasRemision_usuario_id_fkey")
   @@index([venta_id])
+  @@map("guias_remision")
 }
 
 model NotaCreditoDetalles {
@@ -559,6 +583,7 @@ model NotaCreditoDetalles {
   @@index([nota_credito_id])
   @@index([producto_id])
   @@index([tenant_id])
+  @@map("nota_credito_detalles")
 }
 
 model NotasCredito {
@@ -594,6 +619,7 @@ model NotasCredito {
   @@index([tenant_id])
   @@index([usuario_id], map: "NotasCredito_usuario_id_fkey")
   @@index([venta_referencia_id])
+  @@map("notas_credito")
 }
 
 model Pagos {
@@ -616,6 +642,7 @@ model Pagos {
   @@index([metodo_pago])
   @@index([tenant_id])
   @@index([usuario_id])
+  @@map("pagos")
 }
 
 enum RolUsuario {
