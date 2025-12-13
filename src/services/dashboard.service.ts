@@ -1,728 +1,703 @@
 import { db } from '../config/db';
-import type { DashboardQueryDTO, DashboardVentasEstadisticasResponseDTO } from '../dtos/dashboard.dto';
-import type { DashboardGeneralResponseDTO } from '../dtos/dashboard-general.dto';
-import type { DashboardVentasAnalisisResponseDTO } from '../dtos/dashboard-ventas.dto';
+import { subDays, startOfDay, endOfDay, format, differenceInDays } from 'date-fns';
+import type { DashboardGeneralResponseDTO, DashboardVentasResponseDTO } from '../dtos/dashboard.dto';
+import { Prisma } from '@prisma/client';
 
 /**
- * Genera las estadísticas completas del dashboard de ventas
+ * Servicio de Dashboards
+ * Implementa la especificación de dashboard.md
  */
-export async function generarEstadisticasDashboardVentas(
-  tenantId: number,
-  params: DashboardQueryDTO
-): Promise<DashboardVentasEstadisticasResponseDTO> {
-  
-  // Función auxiliar para convertir string "YYYY-MM-DD" a Date local (inicio del día)
-  const parseLocalDate = (dateStr: string): Date => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day, 0, 0, 0, 0);
-  };
 
-  // Calcular fechas del período actual
-  const fechaFin = params.fecha_fin 
-    ? (() => {
-        const date = parseLocalDate(params.fecha_fin);
-        date.setHours(23, 59, 59, 999); // Fin del día
-        return date;
-      })()
-    : (() => {
-        const date = new Date();
-        date.setHours(23, 59, 59, 999); // Fin del día actual
-        return date;
-      })();
-  
-  const fechaInicio = params.fecha_inicio 
-    ? parseLocalDate(params.fecha_inicio)
-    : (() => {
-        const date = new Date(fechaFin);
-        date.setDate(date.getDate() - 27); // 28 días atrás
-        date.setHours(0, 0, 0, 0); // Inicio del día
-        return date;
-      })();
+// ============================================
+// DASHBOARD GENERAL (Torre de Control / CEO)
+// ============================================
 
-  // Calcular fechas del período anterior (mismo rango de días)
-  const diasPeriodo = Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-  const fechaInicioPeriodoAnterior = new Date(fechaInicio.getTime() - diasPeriodo * 24 * 60 * 60 * 1000);
-  const fechaFinPeriodoAnterior = new Date(fechaInicio.getTime() - 24 * 60 * 60 * 1000);
+export async function generarDashboardGeneral(
+    tenantId: number
+): Promise<DashboardGeneralResponseDTO> {
+    const hoy = new Date();
+    const hace30Dias = subDays(hoy, 30);
+    const hace60Dias = subDays(hoy, 60);
 
-  // 1. Obtener ventas del período actual con detalles
-  const ventasActuales = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: {
-        gte: fechaInicio,
-        lte: fechaFin,
-      },
-    },
-    include: {
-      VentaDetalles: {
+    // ============================================
+    // 1. LIQUIDEZ DESGLOSADA
+    // ============================================
+
+    // A. En Caja (Riesgo) - Sesiones abiertas
+    const sesionesAbiertas = await db.sesionesCaja.findMany({
+        where: { tenant_id: tenantId, estado: 'ABIERTA' },
         include: {
-          producto: {
-            include: {
-              categoria: true,
-            },
-          },
+            movimientos: true,
+            ventas: { select: { total: true } },
         },
-      },
-    },
-  });
-
-  // 2. Obtener ventas del período anterior (solo totales)
-  const ventasAnteriores = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: {
-        gte: fechaInicioPeriodoAnterior,
-        lte: fechaFinPeriodoAnterior,
-      },
-    },
-    select: {
-      total: true,
-      VentaDetalles: {
-        select: {
-          valor_unitario: true,
-          cantidad: true,
-          igv_total: true,
-        },
-      },
-    },
-  });
-
-  // 3. Calcular KPIs del período actual
-  let ingresosBrutos = 0;
-  let costoMercaderia = 0;
-  let igvAcumulado = 0;
-
-  const productoVentas = new Map<number, { 
-    nombre: string;
-    unidades: number;
-    ventas: number;
-    costos: number;
-    categoria: string;
-  }>();
-
-  const categoriaVentas = new Map<string, {
-    ventas: number;
-    costos: number;
-  }>();
-
-  // Procesar ventas actuales
-  for (const venta of ventasActuales) {
-    ingresosBrutos += Number(venta.total);
-    
-    for (const detalle of venta.VentaDetalles) {
-      const cantidad = Number(detalle.cantidad);
-      const valorUnitario = Number(detalle.valor_unitario);
-      const precioUnitario = Number(detalle.precio_unitario);
-      const igvLinea = Number(detalle.igv_total);
-      
-      // Costo estimado (asumiendo que valor_unitario es el costo base)
-      // En producción, deberías usar el costo real del producto
-      const costoEstimado = valorUnitario * 0.6; // Ajustar según tu margen promedio
-      const costoTotal = costoEstimado * cantidad;
-      
-      costoMercaderia += costoTotal;
-      igvAcumulado += igvLinea;
-
-      // Agregar a productos
-      const productoId = detalle.producto_id;
-      if (!productoVentas.has(productoId)) {
-        productoVentas.set(productoId, {
-          nombre: detalle.producto.nombre,
-          unidades: 0,
-          ventas: 0,
-          costos: 0,
-          categoria: detalle.producto.categoria?.nombre || 'Sin categoría',
-        });
-      }
-      
-      const prod = productoVentas.get(productoId)!;
-      prod.unidades += cantidad;
-      prod.ventas += precioUnitario * cantidad;
-      prod.costos += costoTotal;
-
-      // Agregar a categorías
-      const catNombre = detalle.producto.categoria?.nombre || 'Sin categoría';
-      if (!categoriaVentas.has(catNombre)) {
-        categoriaVentas.set(catNombre, { ventas: 0, costos: 0 });
-      }
-      const cat = categoriaVentas.get(catNombre)!;
-      cat.ventas += precioUnitario * cantidad;
-      cat.costos += costoTotal;
-    }
-  }
-
-  const utilidadNeta = ingresosBrutos - costoMercaderia;
-  const margenBruto = ingresosBrutos > 0 ? (utilidadNeta / ingresosBrutos) * 100 : 0;
-
-  // 4. Calcular KPIs del período anterior
-  let ingresosBrutosAnteriores = 0;
-  let costoMercaderiaAnterior = 0;
-  let igvAcumuladoAnterior = 0;
-
-  for (const venta of ventasAnteriores) {
-    ingresosBrutosAnteriores += Number(venta.total);
-    
-    for (const detalle of venta.VentaDetalles) {
-      const cantidad = Number(detalle.cantidad);
-      const valorUnitario = Number(detalle.valor_unitario);
-      const costoEstimado = valorUnitario * 0.6;
-      
-      costoMercaderiaAnterior += costoEstimado * cantidad;
-      igvAcumuladoAnterior += Number(detalle.igv_total);
-    }
-  }
-
-  const utilidadNetaAnterior = ingresosBrutosAnteriores - costoMercaderiaAnterior;
-
-  // 5. Calcular porcentajes de cambio
-  const calcularCambio = (actual: number, anterior: number): number => {
-    if (anterior === 0) return actual > 0 ? 100 : 0;
-    return Number((((actual - anterior) / anterior) * 100).toFixed(1));
-  };
-
-  // 6. Generar serie temporal (datos por día)
-  const serieTemporal: DashboardVentasEstadisticasResponseDTO['serie_temporal'] = [];
-  
-  for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
-    const diaStr = d.toISOString().split('T')[0];
-    const ventasDia = ventasActuales.filter(v => 
-      v.created_at.toISOString().split('T')[0] === diaStr
-    );
-
-    let costoDia = 0;
-    let gananciaDia = 0;
-    let fisicaDia = 0;
-    let webDia = 0;
-
-    for (const venta of ventasDia) {
-      const totalVenta = Number(venta.total);
-      let costoVenta = 0;
-
-      for (const detalle of venta.VentaDetalles) {
-        const cantidad = Number(detalle.cantidad);
-        const valorUnitario = Number(detalle.valor_unitario);
-        costoVenta += valorUnitario * 0.6 * cantidad;
-      }
-
-      costoDia += costoVenta;
-      gananciaDia += (totalVenta - costoVenta);
-
-      // Determinar canal (esto depende de tu lógica de negocio)
-      // Por ahora asumimos 70% física, 30% web
-      if (Math.random() > 0.3) {
-        fisicaDia += totalVenta;
-      } else {
-        webDia += totalVenta;
-      }
-    }
-
-    serieTemporal.push({
-      date: diaStr,
-      costo: Math.round(costoDia * 100) / 100,
-      ganancia: Math.round(gananciaDia * 100) / 100,
-      fisica: Math.round(fisicaDia * 100) / 100,
-      web: Math.round(webDia * 100) / 100,
     });
-  }
 
-  // 7. Top 5 productos rentables
-  const productosArray = Array.from(productoVentas.entries()).map(([_, prod]) => ({
-    nombre: prod.nombre,
-    unidades: Math.round(prod.unidades),
-    margen: prod.ventas > 0 
-      ? Math.round(((prod.ventas - prod.costos) / prod.ventas) * 100) 
-      : 0,
-  }));
+    let enCajaRiesgo = 0;
+    for (const sesion of sesionesAbiertas) {
+        const montoInicial = Number(sesion.monto_inicial);
+        const totalVentas = sesion.ventas.reduce((sum, v) => sum + Number(v.total), 0);
+        const ingresos = sesion.movimientos
+            .filter(m => m.tipo === 'INGRESO')
+            .reduce((sum, m) => sum + Number(m.monto), 0);
+        const egresos = sesion.movimientos
+            .filter(m => m.tipo === 'EGRESO')
+            .reduce((sum, m) => sum + Number(m.monto), 0);
+        enCajaRiesgo += montoInicial + totalVentas + ingresos - egresos;
+    }
 
-  const topProductos = productosArray
-    .sort((a, b) => b.margen - a.margen)
-    .slice(0, 5);
+    // B. Disponible Total - Cierres de sesiones cerradas
+    const sesionesCerradas = await db.sesionesCaja.aggregate({
+        where: {
+            tenant_id: tenantId,
+            estado: 'CERRADA',
+            fecha_cierre: { gte: hace30Dias },
+        },
+        _sum: { monto_final: true },
+    });
+    const disponibleTotal = Number(sesionesCerradas._sum.monto_final ?? 0) + enCajaRiesgo;
 
-  // 8. Rentabilidad por categoría
-  const categoriasArray = Array.from(categoriaVentas.entries()).map(([nombre, cat]) => {
-    const margen = cat.ventas > 0 
-      ? Math.round(((cat.ventas - cat.costos) / cat.ventas) * 100)
-      : 0;
-    
-    let estado: 'Excelente' | 'Bueno' | 'Normal' | 'Volumen';
-    if (margen >= 35) estado = 'Excelente';
-    else if (margen >= 20) estado = 'Bueno';
-    else if (margen >= 15) estado = 'Normal';
-    else estado = 'Volumen';
+    // ============================================
+    // 2. UTILIDAD BRUTA REAL (con costo histórico)
+    // ============================================
+
+    // Usamos costo_unitario snapshot de VentaDetalles para cálculo exacto
+    const ventasDetalles30d = await db.ventaDetalles.findMany({
+        where: {
+            tenant_id: tenantId,
+            venta: { created_at: { gte: hace30Dias } },
+        },
+        select: { precio_unitario: true, cantidad: true, costo_unitario: true },
+    });
+
+    const utilidadBruta30d = ventasDetalles30d.reduce((sum, d) => {
+        const precio = Number(d.precio_unitario);
+        const costo = Number(d.costo_unitario ?? 0); // Costo histórico snapshot
+        const cantidad = Number(d.cantidad);
+        return sum + (precio - costo) * cantidad;
+    }, 0);
+
+    // Período anterior para comparación
+    const ventasDetallesPrevio = await db.ventaDetalles.findMany({
+        where: {
+            tenant_id: tenantId,
+            venta: { created_at: { gte: hace60Dias, lt: hace30Dias } },
+        },
+        select: { precio_unitario: true, cantidad: true, costo_unitario: true },
+    });
+
+    const utilidadBrutaPrevio = ventasDetallesPrevio.reduce((sum, d) => {
+        const precio = Number(d.precio_unitario);
+        const costo = Number(d.costo_unitario ?? 0); // Costo histórico snapshot
+        const cantidad = Number(d.cantidad);
+        return sum + (precio - costo) * cantidad;
+    }, 0);
+
+    const cambioPctUtilidad = utilidadBrutaPrevio > 0
+        ? ((utilidadBruta30d - utilidadBrutaPrevio) / utilidadBrutaPrevio) * 100
+        : 0;
+
+    // ============================================
+    // 3. CUENTAS POR COBRAR VENCIDAS
+    // ============================================
+
+    const cxcVencidas = await db.cuentasPorCobrar.aggregate({
+        where: {
+            tenant_id: tenantId,
+            fecha_vencimiento: { lt: hoy },
+            estado: { in: ['VIGENTE', 'VENCIDA', 'POR_VENCER'] },
+        },
+        _sum: { saldo_pendiente: true },
+    });
+    const totalCxcVencidas = Number(cxcVencidas._sum.saldo_pendiente ?? 0);
+
+    // Período anterior (hace 30-60 días comparado con hoy-30)
+    const cxcVencidasPrevio = await db.cuentasPorCobrar.aggregate({
+        where: {
+            tenant_id: tenantId,
+            fecha_vencimiento: { lt: hace30Dias },
+            estado: { in: ['VIGENTE', 'VENCIDA', 'POR_VENCER'] },
+        },
+        _sum: { saldo_pendiente: true },
+    });
+    const totalCxcPrevio = Number(cxcVencidasPrevio._sum.saldo_pendiente ?? 0);
+    const cambioPctCxc = totalCxcPrevio > 0
+        ? ((totalCxcVencidas - totalCxcPrevio) / totalCxcPrevio) * 100
+        : 0;
+
+    // ============================================
+    // 4. VALOR DEL INVENTARIO
+    // ============================================
+
+    const productos = await db.productos.findMany({
+        where: { tenant_id: tenantId, isActive: true },
+        select: { stock: true, costo_compra: true },
+    });
+
+    const valorInventario = productos.reduce((sum, p) => {
+        return sum + Number(p.stock) * Number(p.costo_compra ?? 0);
+    }, 0);
+
+    // ============================================
+    // 5. GRÁFICO FLUJO DE CAJA (30 días)
+    // ============================================
+
+    const movimientosCaja30d = await db.movimientosCaja.findMany({
+        where: {
+            tenant_id: tenantId,
+            fecha: { gte: hace30Dias },
+        },
+        orderBy: { fecha: 'asc' },
+    });
+
+    // Agrupar por día
+    const flujoPorDia: Record<string, { ingresos: number; egresos: number }> = {};
+    for (let i = 0; i < 30; i++) {
+        const fecha = format(subDays(hoy, 29 - i), 'yyyy-MM-dd');
+        flujoPorDia[fecha] = { ingresos: 0, egresos: 0 };
+    }
+
+    for (const mov of movimientosCaja30d) {
+        const fecha = format(mov.fecha, 'yyyy-MM-dd');
+        if (flujoPorDia[fecha]) {
+            if (mov.tipo === 'INGRESO') {
+                flujoPorDia[fecha].ingresos += Number(mov.monto);
+            } else {
+                flujoPorDia[fecha].egresos += Number(mov.monto);
+            }
+        }
+    }
+
+    const flujoCaja30d = Object.entries(flujoPorDia).map(([fecha, data]) => ({
+        fecha,
+        ingresos: Math.round(data.ingresos * 100) / 100,
+        egresos: Math.round(data.egresos * 100) / 100,
+    }));
+
+    // ============================================
+    // 6. TICKET PROMEDIO (30 días)
+    // ============================================
+
+    const ventas30d = await db.ventas.findMany({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: hace30Dias },
+        },
+        select: { total: true, created_at: true },
+        orderBy: { created_at: 'asc' },
+    });
+
+    // Agrupar por día
+    const ticketPorDia: Record<string, { total: number; count: number }> = {};
+    for (let i = 0; i < 30; i++) {
+        const fecha = format(subDays(hoy, 29 - i), 'yyyy-MM-dd');
+        ticketPorDia[fecha] = { total: 0, count: 0 };
+    }
+
+    for (const venta of ventas30d) {
+        const fecha = format(venta.created_at, 'yyyy-MM-dd');
+        if (ticketPorDia[fecha]) {
+            ticketPorDia[fecha].total += Number(venta.total);
+            ticketPorDia[fecha].count += 1;
+        }
+    }
+
+    const ticketPromedio30d = Object.entries(ticketPorDia).map(([fecha, data]) => ({
+        fecha,
+        ticket_promedio: data.count > 0
+            ? Math.round((data.total / data.count) * 100) / 100
+            : 0,
+    }));
+
+    // ============================================
+    // 7. ALERTAS DE QUIEBRE INMINENTE
+    // ============================================
+
+    // Calcular velocidad de venta por producto (últimos 30 días)
+    const movimientosVenta30d = await db.movimientosInventario.groupBy({
+        by: ['producto_id'],
+        where: {
+            tenant_id: tenantId,
+            tipo_movimiento: 'SALIDA_VENTA',
+            created_at: { gte: hace30Dias },
+        },
+        _sum: { cantidad: true },
+    });
+
+    const velocidadPorProducto = new Map<number, number>();
+    for (const mov of movimientosVenta30d) {
+        velocidadPorProducto.set(
+            mov.producto_id,
+            Number(mov._sum.cantidad ?? 0) / 30
+        );
+    }
+
+    // Obtener productos con stock bajo vs velocidad
+    const productosConStock = await db.productos.findMany({
+        where: { tenant_id: tenantId, isActive: true },
+        select: { id: true, nombre: true, stock: true },
+    });
+
+    const alertasQuiebre = productosConStock
+        .map(p => {
+            const velocidad = velocidadPorProducto.get(p.id) ?? 0;
+            const stock = Number(p.stock);
+            const diasRestantes = velocidad > 0 ? stock / velocidad : Infinity;
+            return {
+                producto_id: p.id,
+                producto_nombre: p.nombre,
+                stock_actual: stock,
+                velocidad_diaria: Math.round(velocidad * 100) / 100,
+                dias_restantes: Math.round(diasRestantes * 10) / 10,
+            };
+        })
+        .filter(a => a.dias_restantes < 7 && a.dias_restantes !== Infinity && a.velocidad_diaria > 0)
+        .sort((a, b) => a.dias_restantes - b.dias_restantes)
+        .slice(0, 10);
+
+    // ============================================
+    // 8. TOP DEUDORES
+    // ============================================
+
+    const cxcPorCliente = await db.cuentasPorCobrar.groupBy({
+        by: ['cliente_id'],
+        where: {
+            tenant_id: tenantId,
+            fecha_vencimiento: { lt: hoy },
+            estado: { in: ['VIGENTE', 'VENCIDA'] },
+        },
+        _sum: { saldo_pendiente: true },
+        _min: { fecha_vencimiento: true },
+    });
+
+    const clienteIds = cxcPorCliente.map(c => c.cliente_id);
+    const clientes = await db.clientes.findMany({
+        where: { id: { in: clienteIds } },
+        select: { id: true, nombre: true, razon_social: true },
+    });
+
+    const clientesMap = new Map(clientes.map(c => [c.id, c]));
+
+    const topDeudores = cxcPorCliente
+        .map(c => {
+            const cliente = clientesMap.get(c.cliente_id);
+            const diasVencido = c._min.fecha_vencimiento
+                ? differenceInDays(hoy, c._min.fecha_vencimiento)
+                : 0;
+            return {
+                cliente_id: c.cliente_id,
+                cliente_nombre: cliente?.razon_social ?? cliente?.nombre ?? `Cliente #${c.cliente_id}`,
+                deuda_vencida: Math.round(Number(c._sum.saldo_pendiente ?? 0) * 100) / 100,
+                dias_vencido: diasVencido,
+            };
+        })
+        .sort((a, b) => b.deuda_vencida - a.deuda_vencida)
+        .slice(0, 5);
+
+    // ============================================
+    // 9. PORCENTAJE VENTAS A CRÉDITO
+    // ============================================
+
+    const ventasPorCondicion = await db.ventas.groupBy({
+        by: ['condicion_pago'],
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: hace30Dias },
+        },
+        _sum: { total: true },
+    });
+
+    let totalContado = 0;
+    let totalCredito = 0;
+    for (const v of ventasPorCondicion) {
+        if (v.condicion_pago === 'CONTADO') {
+            totalContado = Number(v._sum.total ?? 0);
+        } else {
+            totalCredito = Number(v._sum.total ?? 0);
+        }
+    }
+    const totalVentas = totalContado + totalCredito;
+    const porcentajeCredito = totalVentas > 0
+        ? Math.round((totalCredito / totalVentas) * 1000) / 10
+        : 0;
 
     return {
-      nombre,
-      ventas: Math.round(cat.ventas * 100) / 100,
-      margen,
-      estado,
-    };
-  });
-
-  const rentabilidadCategorias = categoriasArray.sort((a, b) => b.margen - a.margen);
-
-  // 9. Retornar respuesta completa
-  return {
-    periodo: {
-      fecha_inicio: fechaInicio.toISOString().split('T')[0],
-      fecha_fin: fechaFin.toISOString().split('T')[0],
-    },
-    kpis: {
-      ingresos_brutos: {
-        valor: Math.round(ingresosBrutos * 100) / 100,
-        comparacion_periodo_anterior: calcularCambio(ingresosBrutos, ingresosBrutosAnteriores),
-      },
-      costo_mercaderia: {
-        valor: Math.round(costoMercaderia * 100) / 100,
-        comparacion_periodo_anterior: calcularCambio(costoMercaderia, costoMercaderiaAnterior),
-      },
-      utilidad_neta: {
-        valor: Math.round(utilidadNeta * 100) / 100,
-        comparacion_periodo_anterior: calcularCambio(utilidadNeta, utilidadNetaAnterior),
-      },
-      igv_acumulado: {
-        valor: Math.round(igvAcumulado * 100) / 100,
-        comparacion_periodo_anterior: calcularCambio(igvAcumulado, igvAcumuladoAnterior),
-      },
-    },
-    margen_bruto_porcentaje: Math.round(margenBruto * 10) / 10,
-    serie_temporal: serieTemporal,
-    top_productos_rentables: topProductos,
-    rentabilidad_categorias: rentabilidadCategorias,
-  };
-}
-
-/**
- * Genera estadísticas para el Dashboard General (Home / Vista del Dueño)
- */
-export async function generarDashboardGeneral(
-  tenantId: number
-): Promise<DashboardGeneralResponseDTO> {
-  
-  const ahora = new Date();
-  const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
-  const finHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59);
-  
-  const inicioAyer = new Date(inicioHoy);
-  inicioAyer.setDate(inicioAyer.getDate() - 1);
-  const finAyer = new Date(finHoy);
-  finAyer.setDate(finAyer.getDate() - 1);
-  
-  const inicio30Dias = new Date(ahora);
-  inicio30Dias.setDate(inicio30Dias.getDate() - 30);
-
-  // 1. Ventas del día
-  const ventasHoy = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicioHoy, lte: finHoy },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-    },
-    select: { total: true },
-  });
-  
-  const ventasAyer = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicioAyer, lte: finAyer },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-    },
-    select: { total: true },
-  });
-
-  const totalHoy = ventasHoy.reduce((sum, v) => sum + Number(v.total), 0);
-  const totalAyer = ventasAyer.reduce((sum, v) => sum + Number(v.total), 0);
-  const comparacionAyer = totalAyer > 0 ? ((totalHoy - totalAyer) / totalAyer) * 100 : 0;
-
-  // 2. Cuentas por cobrar vencidas
-  const cuentasVencidas = await db.cuentasPorCobrar.findMany({
-    where: {
-      tenant_id: tenantId,
-      estado: 'VENCIDA',
-    },
-    select: { saldo_pendiente: true },
-  });
-
-  const montoVencido = cuentasVencidas.reduce((sum, c) => sum + Number(c.saldo_pendiente), 0);
-
-  // 3. Stock crítico
-  const productosCriticos = await db.productos.findMany({
-    where: {
-      tenant_id: tenantId,
-    },
-    select: {
-      id: true,
-      nombre: true,
-      stock: true,
-      stock_minimo: true,
-    },
-    orderBy: { stock: 'asc' },
-    take: 100, // Get more to filter
-  });
-
-  // Filter in memory for stock <= stock_minimo
-  const productosFiltrados = productosCriticos
-    .filter(p => Number(p.stock) <= Number(p.stock_minimo))
-    .slice(0, 5);
-
-  // 4. Caja actual (sum of monto_final from open sessions)
-  const sesionesAbiertas = await db.sesionesCaja.findMany({
-    where: {
-      tenant_id: tenantId,
-      fecha_cierre: null, // Sessions still open
-    },
-    select: { 
-      monto_inicial: true,
-      total_ventas: true,
-    },
-  });
-
-  const saldoTotal = sesionesAbiertas.reduce((sum, s) => {
-    return sum + Number(s.monto_inicial) + Number(s.total_ventas || 0);
-  }, 0);
-
-  // 5. Ventas últimos 30 días
-  const ventasPorDia = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicio30Dias },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-    },
-    select: {
-      created_at: true,
-      total: true,
-    },
-  });
-
-  const ventasDiasMap = new Map<string, number>();
-  for (const venta of ventasPorDia) {
-    const fecha = venta.created_at.toISOString().split('T')[0];
-    ventasDiasMap.set(fecha, (ventasDiasMap.get(fecha) || 0) + Number(venta.total));
-  }
-
-  const ventasUltimos30Dias = Array.from(ventasDiasMap.entries())
-    .map(([fecha, total]) => ({ fecha, total }))
-    .sort((a, b) => a.fecha.localeCompare(b.fecha));
-
-  // 6. Ventas por vendedor (top 5)
-  const ventasConUsuario = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicio30Dias },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-      usuario_id: { not: null },
-    },
-    include: {
-      usuario: true,
-    },
-  });
-
-  const ventasPorUsuarioMap = new Map<string, number>();
-  for (const venta of ventasConUsuario) {
-    if (venta.usuario && venta.usuario.nombre) {
-      const nombre = venta.usuario.nombre;
-      ventasPorUsuarioMap.set(nombre, (ventasPorUsuarioMap.get(nombre) || 0) + Number(venta.total));
-    }
-  }
-  
-  const ventasPorVendedor = Array.from(ventasPorUsuarioMap.entries())
-    .map(([vendedor_nombre, total_ventas]) => ({ vendedor_nombre, total_ventas }))
-    .sort((a, b) => b.total_ventas - a.total_ventas)
-    .slice(0, 5);
-
-  // 7. Facturas pendientes SUNAT
-  const facturasPendientes = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      estado_sunat: 'PENDIENTE',
-    },
-    include: {
-      cliente: true,
-      serie: true,
-    },
-    orderBy: { created_at: 'desc' },
-    take: 10,
-  });
-
-  const facturasPendientesSunat = facturasPendientes.map(v => ({
-    venta_id: v.id,
-    comprobante: v.serie ? `${v.serie.codigo}-${String(v.numero_comprobante || 0).padStart(8, '0')}` : 'N/A',
-    cliente: v.cliente?.razon_social || 'Sin cliente',
-    total: Number(v.total),
-    estado_sunat: v.estado_sunat || 'PENDIENTE',
-    fecha: v.created_at.toISOString().split('T')[0],
-  }));
-
-  // 8. Respuesta
-  return {
-    kpis: {
-      ventas_del_dia: {
-        valor: Math.round(totalHoy * 100) / 100,
-        comparacion_ayer: Math.round(comparacionAyer * 10) / 10,
-      },
-      cuentas_por_cobrar_vencidas: {
-        monto_total: Math.round(montoVencido * 100) / 100,
-        cantidad: cuentasVencidas.length,
-      },
-      stock_critico: {
-        cantidad_productos: productosCriticos.length,
-      },
-      caja_actual: {
-        saldo_total: Math.round(saldoTotal * 100) / 100,
-        cajas_abiertas: sesionesAbiertas.length,
-      },
-    },
-    ventas_ultimos_30_dias: ventasUltimos30Dias,
-    ventas_por_vendedor: ventasPorVendedor,
-    facturas_pendientes_sunat: facturasPendientesSunat,
-    productos_criticos: productosFiltrados.map(p => ({
-      producto_id: p.id,
-      nombre: p.nombre,
-      stock_actual: Number(p.stock),
-      stock_minimo: Number(p.stock_minimo),
-    })),
-  };
-}
-
-/**
- * Genera estadísticas para el Dashboard de Ventas (Análisis Comercial)
- */
-export async function generarDashboardVentasAnalisis(
-  tenantId: number,
-  fechaInicio?: string,
-  fechaFin?: string
-): Promise<DashboardVentasAnalisisResponseDTO> {
-  
-  // Función auxiliar para convertir string "YYYY-MM-DD" a Date
-  const parseLocalDate = (dateStr: string): Date => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day, 0, 0, 0, 0);
-  };
-
-  const ahora = new Date();
-  const finPeriodo = fechaFin 
-    ? (() => { const d = parseLocalDate(fechaFin); d.setHours(23, 59, 59, 999); return d; })()
-    : (() => { const d = new Date(ahora); d.setHours(23, 59, 59, 999); return d; })();
-  
-  const inicioPeriodo = fechaInicio
-    ? parseLocalDate(fechaInicio)
-    : (() => { const d = new Date(finPeriodo); d.setDate(d.getDate() - 29); d.setHours(0, 0, 0, 0); return d; })();
-
-  // Período anterior (mismo rango de días)
-  const diasPeriodo = Math.floor((finPeriodo.getTime() - inicioPeriodo.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-  const inicioPeriodoAnterior = new Date(inicioPeriodo.getTime() - diasPeriodo * 24 * 60 * 60 * 1000);
-  const finPeriodoAnterior = new Date(inicioPeriodo.getTime() - 24 * 60 * 60 * 1000);
-
-  // 1. Obtener ventas del período actual
-  const ventasActuales = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicioPeriodo, lte: finPeriodo },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-    },
-    include: {
-      VentaDetalles: {
-        include: {
-          producto: {
-            include: { categoria: true },
-          },
+        liquidez: {
+            en_caja_riesgo: Math.round(enCajaRiesgo * 100) / 100,
+            disponible_total: Math.round(disponibleTotal * 100) / 100,
         },
-      },
-      cliente: true,
-    },
-  });
-
-  const ventasAnteriores = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicioPeriodoAnterior, lte: finPeriodoAnterior },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-    },
-    select: { total: true },
-  });
-
-  // 2. KPI: Ticket Promedio
-  const totalVentas = ventasActuales.reduce((sum, v) => sum + Number(v.total), 0);
-  const ticketPromedio = ventasActuales.length > 0 ? totalVentas / ventasActuales.length : 0;
-  
-  const totalVentasAnt = ventasAnteriores.reduce((sum, v) => sum + Number(v.total), 0);
-  const ticketPromedioAnt = ventasAnteriores.length > 0 ? totalVentasAnt / ventasAnteriores.length : 0;
-  const comparacionTicket = ticketPromedioAnt > 0 
-    ? ((ticketPromedio - ticketPromedioAnt) / ticketPromedioAnt) * 100 
-    : 0;
-
-  // 3. KPI: Margen de Ganancia
-  let costoTotal = 0;
-  for (const venta of ventasActuales) {
-    for (const detalle of venta.VentaDetalles) {
-      const cantidad = Number(detalle.cantidad);
-      const valorUnitario = Number(detalle.valor_unitario);
-      costoTotal += valorUnitario * 0.6 * cantidad; // Estimación
-    }
-  }
-  const gananciaTotal = totalVentas - costoTotal;
-  const margenPorcentaje = totalVentas > 0 ? (gananciaTotal / totalVentas) * 100 : 0;
-
-  // 4. KPI: Ratio Contado vs Crédito
-  let totalContado = 0;
-  let totalCredito = 0;
-  for (const venta of ventasActuales) {
-    if (venta.condicion_pago === 'CONTADO') {
-      totalContado += Number(venta.total);
-    } else {
-      totalCredito += Number(venta.total);
-    }
-  }
-  const contadoPorcentaje = totalVentas > 0 ? (totalContado / totalVentas) * 100 : 0;
-  const creditoPorcentaje = totalVentas > 0 ? (totalCredito / totalVentas) * 100 : 0;
-
-  // 5. KPI: Notas de Crédito
-  const notasCredito = await db.notasCredito.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicioPeriodo, lte: finPeriodo },
-      estado_sunat: 'ACEPTADO',
-    },
-    select: { monto_total: true },
-  });
-  const totalNC = notasCredito.reduce((sum, nc) => sum + Number(nc.monto_total), 0);
-
-  // 6. Ventas por Categoría
-  const ventasPorCategoria = new Map<string, number>();
-  for (const venta of ventasActuales) {
-    for (const detalle of venta.VentaDetalles) {
-      const categoria = detalle.producto.categoria?.nombre || 'Sin categoría';
-      const monto = Number(detalle.precio_unitario) * Number(detalle.cantidad);
-      ventasPorCategoria.set(categoria, (ventasPorCategoria.get(categoria) || 0) + monto);
-    }
-  }
-  const ventasPorCategoriaArray = Array.from(ventasPorCategoria.entries())
-    .map(([categoria, monto]) => ({
-      categoria,
-      monto,
-      porcentaje: totalVentas > 0 ? (monto / totalVentas) * 100 : 0,
-    }))
-    .sort((a, b) => b.monto - a.monto);
-
-  // 7. Métodos de pago últimos 7 días
-  const inicio7Dias = new Date(finPeriodo);
-  inicio7Dias.setDate(inicio7Dias.getDate() - 6);
-  
-  const ventas7Dias = await db.ventas.findMany({
-    where: {
-      tenant_id: tenantId,
-      created_at: { gte: inicio7Dias, lte: finPeriodo },
-      estado_sunat: { in: ['ACEPTADO', 'PENDIENTE'] },
-    },
-    select: {
-      created_at: true,
-      metodo_pago: true,
-      total: true,
-    },
-  });
-
-  const metodosPagoPorDia = new Map<string, { efectivo: number; yape: number; tarjeta: number }>();
-  
-  for (const venta of ventas7Dias) {
-    const dia = venta.created_at.toISOString().split('T')[0];
-    if (!metodosPagoPorDia.has(dia)) {
-      metodosPagoPorDia.set(dia, { efectivo: 0, yape: 0, tarjeta: 0 });
-    }
-    const metodosDia = metodosPagoPorDia.get(dia)!;
-    const monto = Number(venta.total);
-    
-    const metodo = venta.metodo_pago?.toUpperCase();
-    if (metodo === 'EFECTIVO') metodosDia.efectivo += monto;
-    else if (metodo === 'YAPE') metodosDia.yape += monto;
-    else if (metodo === 'TARJETA') metodosDia.tarjeta += monto;
-    else metodosDia.efectivo += monto; // Default to efectivo
-  }
-  
-  const metodosPagoArray = Array.from(metodosPagoPorDia.entries())
-    .map(([dia, metodos]) => ({ dia, ...metodos }))
-    .sort((a, b) => a.dia.localeCompare(b.dia));
-
-  // 8. Top 10 Productos Más Vendidos
-  const productoVentas = new Map<number, { nombre: string; cantidad: number; total: number }>();
-  for (const venta of ventasActuales) {
-    for (const detalle of venta.VentaDetalles) {
-      const prodId = detalle.producto_id;
-      if (!productoVentas.has(prodId)) {
-        productoVentas.set(prodId, {
-          nombre: detalle.producto.nombre,
-          cantidad: 0,
-          total: 0,
-        });
-      }
-      const prod = productoVentas.get(prodId)!;
-      prod.cantidad += Number(detalle.cantidad);
-      prod.total += Number(detalle.precio_unitario) * Number(detalle.cantidad);
-    }
-  }
-  
-  const top10Productos = Array.from(productoVentas.entries())
-    .map(([id, prod]) => ({
-      producto_id: id,
-      nombre: prod.nombre,
-      cantidad_vendida: prod.cantidad,
-      total_generado: prod.total,
-    }))
-    .sort((a, b) => b.total_generado - a.total_generado)
-    .slice(0, 10);
-
-  // 9. Top 10 Mejores Clientes
-  const clienteCompras = new Map<number, { nombre: string; total: number; ultimaCompra: Date }>();
-  for (const venta of ventasActuales) {
-    if (!venta.cliente_id) continue;
-    
-    const clienteId = venta.cliente_id;
-    if (!clienteCompras.has(clienteId)) {
-      clienteCompras.set(clienteId, {
-        nombre: venta.cliente?.razon_social || 'Sin nombre',
-        total: 0,
-        ultimaCompra: venta.created_at,
-      });
-    }
-    const cliente = clienteCompras.get(clienteId)!;
-    cliente.total += Number(venta.total);
-    if (venta.created_at > cliente.ultimaCompra) {
-      cliente.ultimaCompra = venta.created_at;
-    }
-  }
-  
-  const top10Clientes = Array.from(clienteCompras.entries())
-    .map(([id, cliente]) => ({
-      cliente_id: id,
-      nombre: cliente.nombre,
-      total_comprado: cliente.total,
-      ultima_compra: cliente.ultimaCompra.toISOString().split('T')[0],
-    }))
-    .sort((a, b) => b.total_comprado - a.total_comprado)
-    .slice(0, 10);
-
-  // 10. Respuesta
-  return {
-    kpis: {
-      ticket_promedio: {
-        valor: Math.round(ticketPromedio * 100) / 100,
-        comparacion_mes_anterior: Math.round(comparacionTicket * 10) / 10,
-      },
-      margen_ganancia: {
-        porcentaje: Math.round(margenPorcentaje * 10) / 10,
-        total: Math.round(gananciaTotal * 100) / 100,
-      },
-      ratio_contado_credito: {
-        contado_porcentaje: Math.round(contadoPorcentaje * 10) / 10,
-        credito_porcentaje: Math.round(creditoPorcentaje * 10) / 10,
-      },
-      notas_credito: {
-        monto_total: Math.round(totalNC * 100) / 100,
-        cantidad: notasCredito.length,
-      },
-    },
-    ventas_por_categoria: ventasPorCategoriaArray,
-    metodos_pago_ultimos_7_dias: metodosPagoArray,
-    top_10_productos: top10Productos,
-    top_10_clientes: top10Clientes,
-  };
+        utilidad_bruta: {
+            valor: Math.round(utilidadBruta30d * 100) / 100,
+            cambio_porcentual: Math.round(cambioPctUtilidad * 10) / 10,
+        },
+        cxc_vencidas: {
+            valor: Math.round(totalCxcVencidas * 100) / 100,
+            cambio_porcentual: Math.round(cambioPctCxc * 10) / 10,
+        },
+        valor_inventario: Math.round(valorInventario * 100) / 100,
+        flujo_caja_30d: flujoCaja30d,
+        ticket_promedio_30d: ticketPromedio30d,
+        alertas_quiebre: alertasQuiebre,
+        top_deudores: topDeudores,
+        porcentaje_ventas_credito: porcentajeCredito,
+    };
 }
 
+// ============================================
+// DASHBOARD DE VENTAS (Motor Comercial / Gerente)
+// ============================================
+
+export async function generarDashboardVentas(
+    tenantId: number,
+    fechaInicio?: string,
+    fechaFin?: string
+): Promise<DashboardVentasResponseDTO> {
+    const hoy = new Date();
+    const inicio = fechaInicio ? new Date(fechaInicio) : subDays(hoy, 30);
+    const fin = fechaFin ? new Date(fechaFin) : hoy;
+    const diasPeriodo = differenceInDays(fin, inicio) || 1;
+    const inicioPrevio = subDays(inicio, diasPeriodo);
+
+    // ============================================
+    // 1. VENTAS TOTALES NETAS
+    // ============================================
+
+    const ventasTotales = await db.ventas.aggregate({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: inicio, lte: fin },
+        },
+        _sum: { total: true },
+    });
+    const totalVentas = Number(ventasTotales._sum.total ?? 0);
+
+    const ventasPrevio = await db.ventas.aggregate({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: inicioPrevio, lt: inicio },
+        },
+        _sum: { total: true },
+    });
+    const totalPrevio = Number(ventasPrevio._sum.total ?? 0);
+    const cambioVentas = totalPrevio > 0
+        ? ((totalVentas - totalPrevio) / totalPrevio) * 100
+        : 0;
+
+    // ============================================
+    // 2. MARGEN PROMEDIO
+    // ============================================
+
+    const detalles = await db.ventaDetalles.findMany({
+        where: {
+            tenant_id: tenantId,
+            venta: { created_at: { gte: inicio, lte: fin } },
+        },
+        select: {
+            producto_id: true,
+            precio_unitario: true,
+            cantidad: true,
+            costo_unitario: true, // Costo histórico snapshot
+        },
+    });
+
+    let totalIngresos = 0;
+    let totalCostos = 0;
+    for (const d of detalles) {
+        const precio = Number(d.precio_unitario);
+        const cantidad = Number(d.cantidad);
+        const costo = Number(d.costo_unitario ?? 0);
+        totalIngresos += precio * cantidad;
+        totalCostos += costo * cantidad;
+    }
+
+    const margenPromedio = totalIngresos > 0
+        ? ((totalIngresos - totalCostos) / totalIngresos) * 100
+        : 0;
+
+    // Margen previo
+    const detallesPrevio = await db.ventaDetalles.findMany({
+        where: {
+            tenant_id: tenantId,
+            venta: { created_at: { gte: inicioPrevio, lt: inicio } },
+        },
+        select: { precio_unitario: true, cantidad: true, costo_unitario: true },
+    });
+
+    let ingresosPrevio = 0;
+    let costosPrevio = 0;
+    for (const d of detallesPrevio) {
+        ingresosPrevio += Number(d.precio_unitario) * Number(d.cantidad);
+        costosPrevio += Number(d.costo_unitario ?? 0) * Number(d.cantidad);
+    }
+    const margenPrevio = ingresosPrevio > 0
+        ? ((ingresosPrevio - costosPrevio) / ingresosPrevio) * 100
+        : 0;
+    const cambioMargen = margenPrevio > 0
+        ? margenPromedio - margenPrevio
+        : 0;
+
+    // ============================================
+    // 3. TASA DE RECURRENCIA
+    // ============================================
+
+    const hace90Dias = subDays(inicio, 90);
+
+    // Clientes que compraron en los últimos 90 días antes del período
+    const clientesRecurrentes = await db.ventas.findMany({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: hace90Dias, lt: inicio },
+            cliente_id: { not: null },
+        },
+        select: { cliente_id: true },
+        distinct: ['cliente_id'],
+    });
+    const setRecurrentes = new Set(clientesRecurrentes.map(c => c.cliente_id));
+
+    // Ventas del período con cliente
+    const ventasConCliente = await db.ventas.findMany({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: inicio, lte: fin },
+        },
+        select: { cliente_id: true, total: true },
+    });
+
+    let ventasRecurrentes = 0;
+    let ventasTotalesCliente = 0;
+    for (const v of ventasConCliente) {
+        const monto = Number(v.total);
+        ventasTotalesCliente += monto;
+        if (v.cliente_id && setRecurrentes.has(v.cliente_id)) {
+            ventasRecurrentes += monto;
+        }
+    }
+
+    const tasaRecurrencia = ventasTotalesCliente > 0
+        ? (ventasRecurrentes / ventasTotalesCliente) * 100
+        : 0;
+
+    // ============================================
+    // 4. TASA DE DEVOLUCIONES
+    // ============================================
+
+    const devolucionesTotal = await db.notasCredito.aggregate({
+        where: {
+            tenant_id: tenantId,
+            fecha_emision: { gte: inicio, lte: fin },
+            tipo_nota: { in: ['DEVOLUCION_TOTAL', 'DEVOLUCION_PARCIAL'] },
+        },
+        _sum: { monto_total: true },
+    });
+    const totalDevoluciones = Number(devolucionesTotal._sum.monto_total ?? 0);
+    const tasaDevoluciones = totalVentas > 0
+        ? (totalDevoluciones / totalVentas) * 100
+        : 0;
+
+    // ============================================
+    // 5. TOP ROTACIÓN (Unidades vendidas)
+    // ============================================
+
+    const rotacionRaw = await db.ventaDetalles.groupBy({
+        by: ['producto_id'],
+        where: {
+            tenant_id: tenantId,
+            venta: { created_at: { gte: inicio, lte: fin } },
+        },
+        _sum: { cantidad: true },
+    });
+
+    const productoIds = rotacionRaw.map(r => r.producto_id);
+    const productosInfo = await db.productos.findMany({
+        where: { id: { in: productoIds } },
+        select: { id: true, nombre: true, costo_compra: true },
+    });
+    const productosMap = new Map(productosInfo.map(p => [p.id, p]));
+
+    // Enriquecer con ingresos y utilidad
+    const detallesPorProducto = new Map<number, { ingresos: number; cantidad: number; costo: number }>();
+    for (const d of detalles) {
+        const prodId = d.producto_id;
+        const current = detallesPorProducto.get(prodId) ?? { ingresos: 0, cantidad: 0, costo: 0 };
+        current.ingresos += Number(d.precio_unitario) * Number(d.cantidad);
+        current.cantidad += Number(d.cantidad);
+        current.costo += Number(d.costo_unitario ?? 0) * Number(d.cantidad);
+        detallesPorProducto.set(prodId, current);
+    }
+
+    const topRotacion = rotacionRaw
+        .map(r => {
+            const prod = productosMap.get(r.producto_id);
+            const stats = detallesPorProducto.get(r.producto_id);
+            const utilidad = (stats?.ingresos ?? 0) - (stats?.costo ?? 0);
+            const margen = (stats?.ingresos ?? 0) > 0
+                ? (utilidad / (stats?.ingresos ?? 1)) * 100
+                : 0;
+            return {
+                producto_id: r.producto_id,
+                producto_nombre: prod?.nombre ?? `Producto #${r.producto_id}`,
+                unidades_vendidas: Math.round(Number(r._sum.cantidad ?? 0) * 100) / 100,
+                ingresos: Math.round((stats?.ingresos ?? 0) * 100) / 100,
+                utilidad: Math.round(utilidad * 100) / 100,
+                margen_porcentaje: Math.round(margen * 10) / 10,
+            };
+        })
+        .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas)
+        .slice(0, 10);
+
+    // ============================================
+    // 6. TOP RENTABILIDAD (Utilidad generada)
+    // ============================================
+
+    const topRentabilidad = Array.from(detallesPorProducto.entries())
+        .map(([prodId, stats]) => {
+            const prod = productosMap.get(prodId);
+            const utilidad = stats.ingresos - stats.costo;
+            const margen = stats.ingresos > 0 ? (utilidad / stats.ingresos) * 100 : 0;
+            return {
+                producto_id: prodId,
+                producto_nombre: prod?.nombre ?? `Producto #${prodId}`,
+                unidades_vendidas: Math.round(stats.cantidad * 100) / 100,
+                ingresos: Math.round(stats.ingresos * 100) / 100,
+                utilidad: Math.round(utilidad * 100) / 100,
+                margen_porcentaje: Math.round(margen * 10) / 10,
+            };
+        })
+        .sort((a, b) => b.utilidad - a.utilidad)
+        .slice(0, 10);
+
+    // ============================================
+    // 7. RANKING DE VENDEDORES
+    // ============================================
+
+    const ventasPorVendedor = await db.ventas.findMany({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: inicio, lte: fin },
+            usuario_id: { not: null },
+        },
+        include: {
+            VentaDetalles: {
+                select: { precio_unitario: true, cantidad: true, costo_unitario: true },
+            },
+            usuario: { select: { id: true, nombre: true, email: true } },
+        },
+    });
+
+    const vendedoresStats = new Map<number, {
+        nombre: string;
+        total: number;
+        utilidad: number;
+        count: number;
+    }>();
+
+    for (const venta of ventasPorVendedor) {
+        if (!venta.usuario_id) continue;
+        const current = vendedoresStats.get(venta.usuario_id) ?? {
+            nombre: venta.usuario?.nombre ?? venta.usuario?.email ?? `Usuario #${venta.usuario_id}`,
+            total: 0,
+            utilidad: 0,
+            count: 0,
+        };
+        current.total += Number(venta.total);
+        current.count += 1;
+        for (const d of venta.VentaDetalles) {
+            const precio = Number(d.precio_unitario) * Number(d.cantidad);
+            const costo = Number(d.costo_unitario ?? 0) * Number(d.cantidad);
+            current.utilidad += precio - costo;
+        }
+        vendedoresStats.set(venta.usuario_id, current);
+    }
+
+    const rankingVendedores = Array.from(vendedoresStats.entries())
+        .map(([userId, stats]) => ({
+            usuario_id: userId,
+            vendedor_nombre: stats.nombre,
+            ventas_total: Math.round(stats.total * 100) / 100,
+            utilidad_generada: Math.round(stats.utilidad * 100) / 100,
+            cantidad_ventas: stats.count,
+        }))
+        .sort((a, b) => b.utilidad_generada - a.utilidad_generada);
+
+    // ============================================
+    // 8. MAPA DE CALOR HORARIO
+    // ============================================
+
+    const ventasPorHora = await db.ventas.findMany({
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: inicio, lte: fin },
+        },
+        select: { created_at: true, total: true },
+    });
+
+    const mapaCalor: Record<number, { cantidad: number; monto: number }> = {};
+    for (let h = 0; h < 24; h++) {
+        mapaCalor[h] = { cantidad: 0, monto: 0 };
+    }
+
+    for (const v of ventasPorHora) {
+        const hora = v.created_at.getHours();
+        mapaCalor[hora].cantidad += 1;
+        mapaCalor[hora].monto += Number(v.total);
+    }
+
+    const mapaCalorHorario = Object.entries(mapaCalor).map(([hora, data]) => ({
+        hora: parseInt(hora),
+        cantidad_ventas: data.cantidad,
+        monto_total: Math.round(data.monto * 100) / 100,
+    }));
+
+    // ============================================
+    // 9. DISTRIBUCIÓN EFECTIVO VS CRÉDITO
+    // ============================================
+
+    const ventasCondicion = await db.ventas.groupBy({
+        by: ['condicion_pago'],
+        where: {
+            tenant_id: tenantId,
+            created_at: { gte: inicio, lte: fin },
+        },
+        _sum: { total: true },
+    });
+
+    let efectivo = 0;
+    let credito = 0;
+    for (const v of ventasCondicion) {
+        if (v.condicion_pago === 'CONTADO') {
+            efectivo = Number(v._sum.total ?? 0);
+        } else {
+            credito = Number(v._sum.total ?? 0);
+        }
+    }
+    const totalDist = efectivo + credito;
+
+    return {
+        periodo: {
+            fecha_inicio: format(inicio, 'yyyy-MM-dd'),
+            fecha_fin: format(fin, 'yyyy-MM-dd'),
+        },
+        ventas_totales_netas: {
+            valor: Math.round(totalVentas * 100) / 100,
+            cambio_porcentual: Math.round(cambioVentas * 10) / 10,
+        },
+        margen_promedio: {
+            valor: Math.round(margenPromedio * 10) / 10,
+            cambio_porcentual: Math.round(cambioMargen * 10) / 10,
+        },
+        tasa_recurrencia: Math.round(tasaRecurrencia * 10) / 10,
+        tasa_devoluciones: Math.round(tasaDevoluciones * 10) / 10,
+        top_rotacion: topRotacion,
+        top_rentabilidad: topRentabilidad,
+        ranking_vendedores: rankingVendedores,
+        mapa_calor_horario: mapaCalorHorario,
+        distribucion_pago: {
+            efectivo: totalDist > 0 ? Math.round((efectivo / totalDist) * 1000) / 10 : 100,
+            credito: totalDist > 0 ? Math.round((credito / totalDist) * 1000) / 10 : 0,
+        },
+    };
+}
+
+// Alias para compatibilidad con controllers existentes
+export const generarDashboardGeneral_old = generarDashboardGeneral;
+export const generarDashboardVentasAnalisis = generarDashboardVentas;
+export const generarEstadisticasDashboardVentas = generarDashboardVentas;

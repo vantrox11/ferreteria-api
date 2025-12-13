@@ -61,6 +61,7 @@
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
     "decimal.js": "^10.6.0",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",

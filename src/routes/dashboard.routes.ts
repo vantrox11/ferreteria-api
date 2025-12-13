@@ -3,18 +3,16 @@ import { z } from 'zod';
 import { checkTenant } from '../middlewares/tenant.middleware';
 import { checkAuth } from '../middlewares/auth.middleware';
 import { validateRequest } from '../middlewares/validate.middleware';
-import { 
+import {
   getDashboardGeneralHandler,
-  getDashboardVentasAnalisisHandler,
-  getDashboardVentasEstadisticasHandler 
+  getDashboardVentasHandler,
 } from '../controllers/dashboard.controller';
 import { registry, commonResponses } from '../config/openapi-registry';
 import {
-  DashboardVentasEstadisticasResponseSchema,
+  DashboardGeneralResponseSchema,
+  DashboardVentasResponseSchema,
   DashboardQuerySchema,
 } from '../dtos/dashboard.dto';
-import { DashboardGeneralResponseSchema } from '../dtos/dashboard-general.dto';
-import { DashboardVentasAnalisisResponseSchema } from '../dtos/dashboard-ventas.dto';
 
 const router = Router();
 
@@ -26,8 +24,19 @@ registry.registerPath({
   method: 'get',
   path: '/api/dashboard/general',
   tags: ['Dashboard'],
-  summary: 'Dashboard General (Home / Vista del Dueño)',
-  description: 'Retorna KPIs de salud financiera, ventas últimos 30 días, ventas por vendedor, facturas pendientes SUNAT y productos críticos',
+  summary: 'Dashboard General (Torre de Control / CEO)',
+  description: `
+    Retorna los signos vitales del negocio:
+    - Liquidez desglosada (efectivo en cajas/disponible total)
+    - Utilidad bruta real con comparación vs período anterior
+    - Cuentas por cobrar vencidas
+    - Valor del inventario
+    - Gráfico de flujo de caja (30 días)
+    - Ticket promedio (30 días)
+    - Alertas de quiebre inminente de stock
+    - Top 5 deudores
+    - Porcentaje de ventas a crédito
+  `,
   security: [{ bearerAuth: [] }],
   responses: {
     200: {
@@ -44,58 +53,34 @@ registry.registerPath({
 
 router.get('/general', getDashboardGeneralHandler);
 
-// ==================== GET /dashboard/ventas/analisis ====================
-const FechaQuerySchema = z.object({
-  fecha_inicio: z.string().optional(),
-  fecha_fin: z.string().optional(),
-});
-
+// ==================== GET /dashboard/ventas ====================
 registry.registerPath({
   method: 'get',
-  path: '/api/dashboard/ventas/analisis',
+  path: '/api/dashboard/ventas',
   tags: ['Dashboard'],
-  summary: 'Dashboard de Ventas (Análisis Comercial)',
-  description: 'Retorna KPIs de rendimiento, ventas por categoría, métodos de pago, top 10 productos y top 10 clientes',
-  security: [{ bearerAuth: [] }],
-  request: {
-    query: FechaQuerySchema,
-  },
-  responses: {
-    200: {
-      description: 'Estadísticas del Dashboard de Ventas',
-      content: {
-        'application/json': {
-          schema: DashboardVentasAnalisisResponseSchema,
-        },
-      },
-    },
-    ...commonResponses,
-  },
-});
-
-router.get(
-  '/ventas/analisis',
-  validateRequest(z.object({ query: FechaQuerySchema })),
-  getDashboardVentasAnalisisHandler
-);
-
-// ==================== GET /dashboard/ventas/estadisticas ====================
-registry.registerPath({
-  method: 'get',
-  path: '/api/dashboard/ventas/estadisticas',
-  tags: ['Dashboard'],
-  summary: 'Obtener estadísticas del dashboard de ventas',
-  description: 'Retorna KPIs, serie temporal, top productos rentables y rentabilidad por categoría. Permite filtrar por rango de fechas.',
+  summary: 'Dashboard de Ventas (Motor Comercial / Gerente)',
+  description: `
+    Retorna análisis comercial completo:
+    - Ventas totales netas con comparación
+    - Margen promedio ponderado
+    - Tasa de recurrencia (fidelización)
+    - Tasa de devoluciones
+    - Top 10 productos por rotación (unidades)
+    - Top 10 productos por rentabilidad (utilidad)
+    - Ranking de vendedores por utilidad generada
+    - Mapa de calor horario
+    - Distribución efectivo vs crédito
+  `,
   security: [{ bearerAuth: [] }],
   request: {
     query: DashboardQuerySchema,
   },
   responses: {
     200: {
-      description: 'Estadísticas del dashboard de ventas',
+      description: 'Estadísticas del Dashboard de Ventas',
       content: {
         'application/json': {
-          schema: DashboardVentasEstadisticasResponseSchema,
+          schema: DashboardVentasResponseSchema,
         },
       },
     },
@@ -104,10 +89,9 @@ registry.registerPath({
 });
 
 router.get(
-  '/ventas/estadisticas',
+  '/ventas',
   validateRequest(z.object({ query: DashboardQuerySchema })),
-  getDashboardVentasEstadisticasHandler
+  getDashboardVentasHandler
 );
 
 export default router;
-

@@ -5260,7 +5260,208 @@
           "movimientos"
         ]
       },
-      "DashboardVentasEstadisticas": {
+      "DashboardGeneral": {
+        "type": "object",
+        "properties": {
+          "liquidez": {
+            "type": "object",
+            "properties": {
+              "en_caja_riesgo": {
+                "type": "number",
+                "description": "Suma de monto_final calculado de sesiones ABIERTAS (dinero físico en riesgo)",
+                "example": 5000
+              },
+              "disponible_total": {
+                "type": "number",
+                "description": "Suma de cierres acumulados + cuentas por cobrar pagadas",
+                "example": 45000
+              }
+            },
+            "required": [
+              "en_caja_riesgo",
+              "disponible_total"
+            ],
+            "description": "Liquidez desglosada: efectivo en riesgo y disponible total"
+          },
+          "utilidad_bruta": {
+            "type": "object",
+            "properties": {
+              "valor": {
+                "type": "number",
+                "example": 12500
+              },
+              "cambio_porcentual": {
+                "type": "number",
+                "description": "Cambio porcentual vs periodo anterior (+/- %)",
+                "example": 15.5
+              }
+            },
+            "required": [
+              "valor",
+              "cambio_porcentual"
+            ],
+            "description": "Utilidad bruta real (precio - costo histórico) del período"
+          },
+          "cxc_vencidas": {
+            "type": "object",
+            "properties": {
+              "valor": {
+                "type": "number",
+                "example": 12500
+              },
+              "cambio_porcentual": {
+                "type": "number",
+                "description": "Cambio porcentual vs periodo anterior (+/- %)",
+                "example": 15.5
+              }
+            },
+            "required": [
+              "valor",
+              "cambio_porcentual"
+            ],
+            "description": "Cuentas por cobrar vencidas (dinero que ya debería estar en caja)"
+          },
+          "valor_inventario": {
+            "type": "number",
+            "description": "Capital inmovilizado en inventario (stock × costo_compra)",
+            "example": 125000
+          },
+          "flujo_caja_30d": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fecha": {
+                  "type": "string",
+                  "example": "2025-01-15"
+                },
+                "ingresos": {
+                  "type": "number",
+                  "example": 3500
+                },
+                "egresos": {
+                  "type": "number",
+                  "example": 1200
+                }
+              },
+              "required": [
+                "fecha",
+                "ingresos",
+                "egresos"
+              ]
+            },
+            "description": "Flujo de caja de los últimos 30 días (ingresos vs egresos)"
+          },
+          "ticket_promedio_30d": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fecha": {
+                  "type": "string",
+                  "example": "2025-01-15"
+                },
+                "ticket_promedio": {
+                  "type": "number",
+                  "example": 85.5
+                }
+              },
+              "required": [
+                "fecha",
+                "ticket_promedio"
+              ]
+            },
+            "description": "Evolución del ticket promedio de los últimos 30 días"
+          },
+          "alertas_quiebre": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "producto_id": {
+                  "type": "number",
+                  "example": 1
+                },
+                "producto_nombre": {
+                  "type": "string",
+                  "example": "Cemento Sol"
+                },
+                "stock_actual": {
+                  "type": "number",
+                  "example": 15
+                },
+                "velocidad_diaria": {
+                  "type": "number",
+                  "description": "Unidades vendidas por día (promedio 30 días)",
+                  "example": 5.2
+                },
+                "dias_restantes": {
+                  "type": "number",
+                  "description": "Días hasta agotamiento al ritmo actual",
+                  "example": 2.9
+                }
+              },
+              "required": [
+                "producto_id",
+                "producto_nombre",
+                "stock_actual",
+                "velocidad_diaria",
+                "dias_restantes"
+              ]
+            },
+            "description": "Productos que se agotarán en menos de 7 días"
+          },
+          "top_deudores": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cliente_id": {
+                  "type": "number",
+                  "example": 5
+                },
+                "cliente_nombre": {
+                  "type": "string",
+                  "example": "Construcciones ABC"
+                },
+                "deuda_vencida": {
+                  "type": "number",
+                  "example": 8500
+                },
+                "dias_vencido": {
+                  "type": "number",
+                  "description": "Días desde la fecha de vencimiento más antigua",
+                  "example": 15
+                }
+              },
+              "required": [
+                "cliente_id",
+                "cliente_nombre",
+                "deuda_vencida",
+                "dias_vencido"
+              ]
+            },
+            "description": "Top 5 clientes con mayor deuda vencida"
+          },
+          "porcentaje_ventas_credito": {
+            "type": "number",
+            "description": "Porcentaje de ventas a crédito vs total (riesgo de liquidez si > 40%)",
+            "example": 35.5
+          }
+        },
+        "required": [
+          "liquidez",
+          "utilidad_bruta",
+          "cxc_vencidas",
+          "valor_inventario",
+          "flujo_caja_30d",
+          "ticket_promedio_30d",
+          "alertas_quiebre",
+          "top_deudores",
+          "porcentaje_ventas_credito"
+        ]
+      },
+      "DashboardVentas": {
         "type": "object",
         "properties": {
           "periodo": {
@@ -5268,11 +5469,11 @@
             "properties": {
               "fecha_inicio": {
                 "type": "string",
-                "description": "Fecha de inicio del período"
+                "example": "2025-01-01"
               },
               "fecha_fin": {
                 "type": "string",
-                "description": "Fecha de fin del período"
+                "example": "2025-01-31"
               }
             },
             "required": [
@@ -5280,201 +5481,262 @@
               "fecha_fin"
             ]
           },
-          "kpis": {
+          "ventas_totales_netas": {
             "type": "object",
             "properties": {
-              "ingresos_brutos": {
-                "type": "object",
-                "properties": {
-                  "valor": {
-                    "type": "number",
-                    "description": "Valor actual del KPI"
-                  },
-                  "comparacion_periodo_anterior": {
-                    "type": "number",
-                    "description": "Porcentaje de cambio vs período anterior"
-                  }
-                },
-                "required": [
-                  "valor",
-                  "comparacion_periodo_anterior"
-                ],
-                "description": "Ingresos brutos totales"
+              "valor": {
+                "type": "number",
+                "example": 12500
               },
-              "costo_mercaderia": {
-                "type": "object",
-                "properties": {
-                  "valor": {
-                    "type": "number",
-                    "description": "Valor actual del KPI"
-                  },
-                  "comparacion_periodo_anterior": {
-                    "type": "number",
-                    "description": "Porcentaje de cambio vs período anterior"
-                  }
-                },
-                "required": [
-                  "valor",
-                  "comparacion_periodo_anterior"
-                ],
-                "description": "Costo total de mercadería vendida"
-              },
-              "utilidad_neta": {
-                "type": "object",
-                "properties": {
-                  "valor": {
-                    "type": "number",
-                    "description": "Valor actual del KPI"
-                  },
-                  "comparacion_periodo_anterior": {
-                    "type": "number",
-                    "description": "Porcentaje de cambio vs período anterior"
-                  }
-                },
-                "required": [
-                  "valor",
-                  "comparacion_periodo_anterior"
-                ],
-                "description": "Utilidad neta (ingresos - costos)"
-              },
-              "igv_acumulado": {
-                "type": "object",
-                "properties": {
-                  "valor": {
-                    "type": "number",
-                    "description": "Valor actual del KPI"
-                  },
-                  "comparacion_periodo_anterior": {
-                    "type": "number",
-                    "description": "Porcentaje de cambio vs período anterior"
-                  }
-                },
-                "required": [
-                  "valor",
-                  "comparacion_periodo_anterior"
-                ],
-                "description": "IGV total acumulado"
+              "cambio_porcentual": {
+                "type": "number",
+                "description": "Cambio porcentual vs periodo anterior (+/- %)",
+                "example": 15.5
               }
             },
             "required": [
-              "ingresos_brutos",
-              "costo_mercaderia",
-              "utilidad_neta",
-              "igv_acumulado"
-            ]
+              "valor",
+              "cambio_porcentual"
+            ],
+            "description": "Total facturado en el período"
           },
-          "margen_bruto_porcentaje": {
+          "margen_promedio": {
+            "type": "object",
+            "properties": {
+              "valor": {
+                "type": "number",
+                "example": 12500
+              },
+              "cambio_porcentual": {
+                "type": "number",
+                "description": "Cambio porcentual vs periodo anterior (+/- %)",
+                "example": 15.5
+              }
+            },
+            "required": [
+              "valor",
+              "cambio_porcentual"
+            ],
+            "description": "Margen promedio ponderado (%)"
+          },
+          "tasa_recurrencia": {
             "type": "number",
-            "description": "Porcentaje de margen bruto general"
+            "description": "Porcentaje de ventas a clientes recurrentes (últimos 90 días)",
+            "example": 68.5
           },
-          "serie_temporal": {
+          "tasa_devoluciones": {
+            "type": "number",
+            "description": "Porcentaje de devoluciones sobre ventas",
+            "example": 2.3
+          },
+          "top_rotacion": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "date": {
+                "producto_id": {
+                  "type": "number",
+                  "example": 1
+                },
+                "producto_nombre": {
                   "type": "string",
-                  "description": "Fecha en formato ISO"
+                  "example": "Cemento Sol"
                 },
-                "costo": {
+                "unidades_vendidas": {
                   "type": "number",
-                  "description": "Costo de mercadería del día"
+                  "example": 150
                 },
-                "ganancia": {
+                "ingresos": {
                   "type": "number",
-                  "description": "Ganancia/utilidad del día"
+                  "example": 4500
                 },
-                "fisica": {
+                "utilidad": {
                   "type": "number",
-                  "description": "Ventas en tienda física"
+                  "example": 675
                 },
-                "web": {
+                "margen_porcentaje": {
                   "type": "number",
-                  "description": "Ventas por canal web"
+                  "example": 15
                 }
               },
               "required": [
-                "date",
-                "costo",
-                "ganancia",
-                "fisica",
-                "web"
+                "producto_id",
+                "producto_nombre",
+                "unidades_vendidas",
+                "ingresos",
+                "utilidad",
+                "margen_porcentaje"
               ]
             },
-            "description": "Datos diarios para el gráfico"
+            "description": "Top 10 productos por unidades vendidas (traen tráfico)"
           },
-          "top_productos_rentables": {
+          "top_rentabilidad": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "nombre": {
+                "producto_id": {
+                  "type": "number",
+                  "example": 1
+                },
+                "producto_nombre": {
                   "type": "string",
-                  "description": "Nombre del producto"
+                  "example": "Cemento Sol"
                 },
-                "unidades": {
+                "unidades_vendidas": {
                   "type": "number",
-                  "description": "Unidades vendidas"
+                  "example": 150
                 },
-                "margen": {
+                "ingresos": {
                   "type": "number",
-                  "description": "Porcentaje de margen de ganancia"
+                  "example": 4500
+                },
+                "utilidad": {
+                  "type": "number",
+                  "example": 675
+                },
+                "margen_porcentaje": {
+                  "type": "number",
+                  "example": 15
                 }
               },
               "required": [
-                "nombre",
-                "unidades",
-                "margen"
+                "producto_id",
+                "producto_nombre",
+                "unidades_vendidas",
+                "ingresos",
+                "utilidad",
+                "margen_porcentaje"
               ]
             },
-            "description": "Top 5 productos más rentables"
+            "description": "Top 10 productos por utilidad generada (dejan dinero)"
           },
-          "rentabilidad_categorias": {
+          "ranking_vendedores": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "nombre": {
-                  "type": "string",
-                  "description": "Nombre de la categoría"
-                },
-                "ventas": {
+                "usuario_id": {
                   "type": "number",
-                  "description": "Total de ventas en soles"
+                  "example": 3
                 },
-                "margen": {
-                  "type": "number",
-                  "description": "Porcentaje de margen"
-                },
-                "estado": {
+                "vendedor_nombre": {
                   "type": "string",
-                  "enum": [
-                    "Excelente",
-                    "Bueno",
-                    "Normal",
-                    "Volumen"
-                  ],
-                  "description": "Estado de rentabilidad"
+                  "example": "Juan Pérez"
+                },
+                "ventas_total": {
+                  "type": "number",
+                  "example": 25000
+                },
+                "utilidad_generada": {
+                  "type": "number",
+                  "example": 4500
+                },
+                "cantidad_ventas": {
+                  "type": "number",
+                  "example": 85
                 }
               },
               "required": [
-                "nombre",
-                "ventas",
-                "margen",
-                "estado"
+                "usuario_id",
+                "vendedor_nombre",
+                "ventas_total",
+                "utilidad_generada",
+                "cantidad_ventas"
               ]
             },
-            "description": "Rentabilidad por categoría"
+            "description": "Ranking de vendedores ordenado por utilidad generada"
+          },
+          "mapa_calor_horario": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "hora": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 23,
+                  "description": "Hora del día (0-23)",
+                  "example": 10
+                },
+                "cantidad_ventas": {
+                  "type": "number",
+                  "example": 35
+                },
+                "monto_total": {
+                  "type": "number",
+                  "example": 5250
+                }
+              },
+              "required": [
+                "hora",
+                "cantidad_ventas",
+                "monto_total"
+              ]
+            },
+            "description": "Ventas por hora del día (0-23)"
+          },
+          "distribucion_pago": {
+            "type": "object",
+            "properties": {
+              "efectivo": {
+                "type": "number",
+                "example": 65.5
+              },
+              "credito": {
+                "type": "number",
+                "example": 34.5
+              }
+            },
+            "required": [
+              "efectivo",
+              "credito"
+            ],
+            "description": "Distribución porcentual de ventas: efectivo vs crédito"
           }
         },
         "required": [
           "periodo",
-          "kpis",
-          "margen_bruto_porcentaje",
-          "serie_temporal",
-          "top_productos_rentables",
-          "rentabilidad_categorias"
+          "ventas_totales_netas",
+          "margen_promedio",
+          "tasa_recurrencia",
+          "tasa_devoluciones",
+          "top_rotacion",
+          "top_rentabilidad",
+          "ranking_vendedores",
+          "mapa_calor_horario",
+          "distribucion_pago"
         ]
+      },
+      "DashboardGeneralQuery": {
+        "type": "object",
+        "properties": {
+          "fecha_inicio": {
+            "type": "string",
+            "description": "Fecha de inicio en formato ISO (YYYY-MM-DD)",
+            "example": "2025-01-01"
+          },
+          "fecha_fin": {
+            "type": "string",
+            "description": "Fecha de fin en formato ISO (YYYY-MM-DD)",
+            "example": "2025-12-31"
+          }
+        }
+      },
+      "DashboardVentasQuery": {
+        "type": "object",
+        "properties": {
+          "fecha_inicio": {
+            "type": "string",
+            "description": "Fecha de inicio en formato ISO (YYYY-MM-DD)",
+            "example": "2025-01-01"
+          },
+          "fecha_fin": {
+            "type": "string",
+            "description": "Fecha de fin en formato ISO (YYYY-MM-DD)",
+            "example": "2025-12-31"
+          }
+        }
       },
       "AuditoriaLog": {
         "type": "object",
@@ -24029,8 +24291,8 @@
         "tags": [
           "Dashboard"
         ],
-        "summary": "Dashboard General (Home / Vista del Dueño)",
-        "description": "Retorna KPIs de salud financiera, ventas últimos 30 días, ventas por vendedor, facturas pendientes SUNAT y productos críticos",
+        "summary": "Dashboard General (Torre de Control / CEO)",
+        "description": "\n    Retorna los signos vitales del negocio:\n    - Liquidez desglosada (efectivo en cajas/disponible total)\n    - Utilidad bruta real con comparación vs período anterior\n    - Cuentas por cobrar vencidas\n    - Valor del inventario\n    - Gráfico de flujo de caja (30 días)\n    - Ticket promedio (30 días)\n    - Alertas de quiebre inminente de stock\n    - Top 5 deudores\n    - Porcentaje de ventas a crédito\n  ",
         "security": [
           {
             "bearerAuth": []
@@ -24042,179 +24304,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "kpis": {
-                      "type": "object",
-                      "properties": {
-                        "ventas_del_dia": {
-                          "type": "object",
-                          "properties": {
-                            "valor": {
-                              "type": "number"
-                            },
-                            "comparacion_ayer": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "valor",
-                            "comparacion_ayer"
-                          ]
-                        },
-                        "cuentas_por_cobrar_vencidas": {
-                          "type": "object",
-                          "properties": {
-                            "monto_total": {
-                              "type": "number"
-                            },
-                            "cantidad": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "monto_total",
-                            "cantidad"
-                          ]
-                        },
-                        "stock_critico": {
-                          "type": "object",
-                          "properties": {
-                            "cantidad_productos": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "cantidad_productos"
-                          ]
-                        },
-                        "caja_actual": {
-                          "type": "object",
-                          "properties": {
-                            "saldo_total": {
-                              "type": "number"
-                            },
-                            "cajas_abiertas": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "saldo_total",
-                            "cajas_abiertas"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "ventas_del_dia",
-                        "cuentas_por_cobrar_vencidas",
-                        "stock_critico",
-                        "caja_actual"
-                      ]
-                    },
-                    "ventas_ultimos_30_dias": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "fecha": {
-                            "type": "string"
-                          },
-                          "total": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "fecha",
-                          "total"
-                        ]
-                      }
-                    },
-                    "ventas_por_vendedor": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "vendedor_nombre": {
-                            "type": "string"
-                          },
-                          "total_ventas": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "vendedor_nombre",
-                          "total_ventas"
-                        ]
-                      }
-                    },
-                    "facturas_pendientes_sunat": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "venta_id": {
-                            "type": "number"
-                          },
-                          "comprobante": {
-                            "type": "string"
-                          },
-                          "cliente": {
-                            "type": "string"
-                          },
-                          "total": {
-                            "type": "number"
-                          },
-                          "estado_sunat": {
-                            "type": "string"
-                          },
-                          "fecha": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "venta_id",
-                          "comprobante",
-                          "cliente",
-                          "total",
-                          "estado_sunat",
-                          "fecha"
-                        ]
-                      }
-                    },
-                    "productos_criticos": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "producto_id": {
-                            "type": "number"
-                          },
-                          "nombre": {
-                            "type": "string"
-                          },
-                          "stock_actual": {
-                            "type": "number"
-                          },
-                          "stock_minimo": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "producto_id",
-                          "nombre",
-                          "stock_actual",
-                          "stock_minimo"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "kpis",
-                    "ventas_ultimos_30_dias",
-                    "ventas_por_vendedor",
-                    "facturas_pendientes_sunat",
-                    "productos_criticos"
-                  ]
+                  "$ref": "#/components/schemas/DashboardGeneral"
                 }
               }
             }
@@ -24358,13 +24448,13 @@
         }
       }
     },
-    "/api/dashboard/ventas/analisis": {
+    "/api/dashboard/ventas": {
       "get": {
         "tags": [
           "Dashboard"
         ],
-        "summary": "Dashboard de Ventas (Análisis Comercial)",
-        "description": "Retorna KPIs de rendimiento, ventas por categoría, métodos de pago, top 10 productos y top 10 clientes",
+        "summary": "Dashboard de Ventas (Motor Comercial / Gerente)",
+        "description": "\n    Retorna análisis comercial completo:\n    - Ventas totales netas con comparación\n    - Margen promedio ponderado\n    - Tasa de recurrencia (fidelización)\n    - Tasa de devoluciones\n    - Top 10 productos por rotación (unidades)\n    - Top 10 productos por rentabilidad (utilidad)\n    - Ranking de vendedores por utilidad generada\n    - Mapa de calor horario\n    - Distribución efectivo vs crédito\n  ",
         "security": [
           {
             "bearerAuth": []
@@ -24373,17 +24463,23 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Fecha de inicio en formato ISO (YYYY-MM-DD)",
+              "example": "2025-01-01"
             },
             "required": false,
+            "description": "Fecha de inicio en formato ISO (YYYY-MM-DD)",
             "name": "fecha_inicio",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Fecha de fin en formato ISO (YYYY-MM-DD)",
+              "example": "2025-12-31"
             },
             "required": false,
+            "description": "Fecha de fin en formato ISO (YYYY-MM-DD)",
             "name": "fecha_fin",
             "in": "query"
           }
@@ -24394,387 +24490,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "kpis": {
-                      "type": "object",
-                      "properties": {
-                        "ticket_promedio": {
-                          "type": "object",
-                          "properties": {
-                            "valor": {
-                              "type": "number"
-                            },
-                            "comparacion_mes_anterior": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "valor",
-                            "comparacion_mes_anterior"
-                          ]
-                        },
-                        "margen_ganancia": {
-                          "type": "object",
-                          "properties": {
-                            "porcentaje": {
-                              "type": "number"
-                            },
-                            "total": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "porcentaje",
-                            "total"
-                          ]
-                        },
-                        "ratio_contado_credito": {
-                          "type": "object",
-                          "properties": {
-                            "contado_porcentaje": {
-                              "type": "number"
-                            },
-                            "credito_porcentaje": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "contado_porcentaje",
-                            "credito_porcentaje"
-                          ]
-                        },
-                        "notas_credito": {
-                          "type": "object",
-                          "properties": {
-                            "monto_total": {
-                              "type": "number"
-                            },
-                            "cantidad": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "monto_total",
-                            "cantidad"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "ticket_promedio",
-                        "margen_ganancia",
-                        "ratio_contado_credito",
-                        "notas_credito"
-                      ]
-                    },
-                    "ventas_por_categoria": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "categoria": {
-                            "type": "string"
-                          },
-                          "monto": {
-                            "type": "number"
-                          },
-                          "porcentaje": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "categoria",
-                          "monto",
-                          "porcentaje"
-                        ]
-                      }
-                    },
-                    "metodos_pago_ultimos_7_dias": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "dia": {
-                            "type": "string"
-                          },
-                          "efectivo": {
-                            "type": "number"
-                          },
-                          "yape": {
-                            "type": "number"
-                          },
-                          "tarjeta": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "dia",
-                          "efectivo",
-                          "yape",
-                          "tarjeta"
-                        ]
-                      }
-                    },
-                    "top_10_productos": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "producto_id": {
-                            "type": "number"
-                          },
-                          "nombre": {
-                            "type": "string"
-                          },
-                          "cantidad_vendida": {
-                            "type": "number"
-                          },
-                          "total_generado": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "producto_id",
-                          "nombre",
-                          "cantidad_vendida",
-                          "total_generado"
-                        ]
-                      }
-                    },
-                    "top_10_clientes": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "cliente_id": {
-                            "type": "number"
-                          },
-                          "nombre": {
-                            "type": "string"
-                          },
-                          "total_comprado": {
-                            "type": "number"
-                          },
-                          "ultima_compra": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "cliente_id",
-                          "nombre",
-                          "total_comprado",
-                          "ultima_compra"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "kpis",
-                    "ventas_por_categoria",
-                    "metodos_pago_ultimos_7_dias",
-                    "top_10_productos",
-                    "top_10_clientes"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error de validación (Datos incorrectos)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Error de validación"
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "field": {
-                            "type": "string",
-                            "example": "email"
-                          },
-                          "message": {
-                            "type": "string",
-                            "example": "Email inválido"
-                          }
-                        },
-                        "required": [
-                          "field",
-                          "message"
-                        ]
-                      },
-                      "description": "Lista de campos con errores"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "errors"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "No autorizado (Token inválido o expirado)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "No autenticado"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Prohibido (No tiene permisos suficientes o Tenant inactivo)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "No autorizado"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Recurso no encontrado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Recurso no encontrado"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto (Recurso duplicado)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "El recurso ya existe"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error interno del servidor",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Error interno del servidor"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/dashboard/ventas/estadisticas": {
-      "get": {
-        "tags": [
-          "Dashboard"
-        ],
-        "summary": "Obtener estadísticas del dashboard de ventas",
-        "description": "Retorna KPIs, serie temporal, top productos rentables y rentabilidad por categoría. Permite filtrar por rango de fechas.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Fecha de inicio en formato ISO (YYYY-MM-DD)"
-            },
-            "required": false,
-            "description": "Fecha de inicio en formato ISO (YYYY-MM-DD)",
-            "name": "fecha_inicio",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Fecha de fin en formato ISO (YYYY-MM-DD)"
-            },
-            "required": false,
-            "description": "Fecha de fin en formato ISO (YYYY-MM-DD)",
-            "name": "fecha_fin",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "fisica",
-                "web",
-                "ambos"
-              ],
-              "default": "ambos",
-              "description": "Canal de venta"
-            },
-            "required": false,
-            "description": "Canal de venta",
-            "name": "canal",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Estadísticas del dashboard de ventas",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DashboardVentasEstadisticas"
+                  "$ref": "#/components/schemas/DashboardVentas"
                 }
               }
             }

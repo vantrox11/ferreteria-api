@@ -8,7 +8,7 @@ import * as inventarioService from '../services/inventario.service';
 import { SesionCajaError, NotFoundError, FiscalError, ValidationError, ComprobanteAceptadoError } from '../utils/app-error';
 
 /**
- * Tipo para detalles de venta con cálculos de IGV
+ * Tipo para detalles de venta con cálculos de IGV y costo histórico
  */
 interface DetalleConIGV {
   producto_id: number;
@@ -17,6 +17,7 @@ interface DetalleConIGV {
   precio_unitario: number;
   igv_total: number;
   tasa_igv: number;
+  costo_unitario: number; // Snapshot del costo al momento de la venta
 }
 
 /**
@@ -266,7 +267,8 @@ export const createVenta = async (
           id: true,
           stock: true,
           nombre: true,
-          afectacion_igv: true
+          afectacion_igv: true,
+          costo_compra: true, // Para snapshot del costo histórico
         },
       });
 
@@ -299,6 +301,7 @@ export const createVenta = async (
         precio_unitario: descomposicion.precio_final,
         igv_total: Number(igv_linea.toFixed(2)),
         tasa_igv: tasaIGV,
+        costo_unitario: Number(producto.costo_compra ?? 0), // Snapshot del costo al momento de la venta
       });
 
       // Acumular total
@@ -345,6 +348,7 @@ export const createVenta = async (
           precio_unitario: detalle.precio_unitario,
           igv_total: detalle.igv_total,
           tasa_igv: detalle.tasa_igv,
+          costo_unitario: detalle.costo_unitario, // Snapshot del costo para cálculo de utilidad
         },
       });
 
@@ -354,7 +358,7 @@ export const createVenta = async (
         productoId: detalle.producto_id,
         tipo: 'SALIDA_VENTA',
         cantidad: detalle.cantidad,
-        costoUnitario: detalle.precio_unitario,
+        costoUnitario: detalle.costo_unitario, // Usar costo histórico, no precio de venta
         ventaId: nuevaVenta.id, // FK explícita
         usuarioId: usuarioId,
       });
